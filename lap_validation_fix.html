@@ -1,0 +1,651 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+#app{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.25rem 0}
+.tabs{display:flex;gap:3px;margin-bottom:8px;border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:5px}
+.tab{font-size:12px;padding:4px 13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer}
+.tab:hover{background:var(--color-background-secondary)}
+.tab.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info);font-weight:500}
+.panel{display:none}.panel.active{display:block}
+.tb{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px;align-items:center}
+button{font-size:12px;padding:4px 11px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer}
+button:hover{background:var(--color-background-secondary)}
+button.on{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)}
+button.ok{background:var(--color-background-success);color:var(--color-text-success);border-color:var(--color-border-success)}
+button.no{background:var(--color-background-danger);color:var(--color-text-danger);border-color:var(--color-border-danger)}
+.sep{width:1px;height:18px;background:var(--color-border-tertiary);margin:0 1px}
+.lbl{font-size:11px;color:var(--color-text-secondary)}
+.val{font-size:11px;font-weight:500;min-width:24px}
+canvas{display:block;cursor:crosshair;touch-action:none}
+.cvs-wrap{border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);overflow:hidden;line-height:0;position:relative}
+.hint{font-size:11px;color:var(--color-text-tertiary);margin-top:5px}
+.rs{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:6px}
+.rc{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:7px 9px;text-align:center}
+.rl{font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px}
+.rv{font-size:15px;font-weight:500}
+.fbar{display:flex;gap:4px;margin-bottom:7px;flex-wrap:wrap;align-items:center;padding:6px 9px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary)}
+.ft{font-size:11px;padding:2px 8px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer}
+.ft.on{background:var(--color-background-success);color:var(--color-text-success);border-color:var(--color-border-success)}
+.lb{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden;margin-bottom:6px}
+.lbh{font-size:10px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.04em;padding:5px 9px;background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);display:grid}
+.lbr{display:grid;padding:4px 9px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:11px;align-items:center}
+.lbr:last-child{border-bottom:none}
+.lbr:hover{background:var(--color-background-secondary)}
+.lbr.leader{background:rgba(255,235,59,0.06);border-left:2px solid #ffeb3b}
+.lbr.top3{background:rgba(129,199,132,0.06);border-left:2px solid #81c784}
+.lbr.dead{opacity:0.35}
+.badge{font-size:10px;padding:1px 6px;border-radius:10px;font-weight:500}
+.ba{background:var(--color-background-success);color:var(--color-text-success)}
+.bd{background:var(--color-background-danger);color:var(--color-text-danger)}
+.bq{background:var(--color-background-warning);color:var(--color-text-warning)}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.pg-g{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:9px 11px;margin:3px}
+.pg-g h3{font-size:10px;font-weight:500;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:4px}
+.pr{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.pr label{font-size:11px;width:138px;flex-shrink:0}
+.pr input[type=range]{flex:1;min-width:0}
+.pr .pv{font-size:11px;font-weight:500;min-width:36px;text-align:right}
+.pr .pu{font-size:10px;color:var(--color-text-tertiary);min-width:26px}
+.fsb{position:absolute;top:7px;right:7px;background:rgba(0,0,0,0.6);border:0.5px solid rgba(255,255,255,0.2);color:#fff;font-size:11px;padding:3px 9px;border-radius:var(--border-radius-md);cursor:pointer;z-index:5}
+.info-box{font-size:11px;padding:6px 10px;border-radius:var(--border-radius-md);margin-bottom:6px;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);line-height:1.8}
+.info-box span{font-weight:500;color:var(--color-text-primary)}
+.tag{display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;margin-right:4px;font-weight:500}
+.tag-better{background:var(--color-background-success);color:var(--color-text-success)}
+.tag-same{background:var(--color-background-warning);color:var(--color-text-warning)}
+.tag-worse{background:var(--color-background-danger);color:var(--color-text-danger)}
+.tag-prog{background:var(--color-background-info);color:var(--color-text-info)}
+</style>
+
+<div id="app">
+<div class="tabs">
+  <div class="tab active" data-tab="editor">Editor de pista</div>
+  <div class="tab" data-tab="physics">Fisica</div>
+  <div class="tab" data-tab="train">Entrenamiento</div>
+  <div class="tab" data-tab="sim">Simulacion</div>
+</div>
+
+<div class="panel active" id="panel-editor">
+  <div class="tb">
+    <button id="btn-free" class="on">Trazo libre</button>
+    <button id="btn-pts">Puntos</button>
+    <div class="sep"></div>
+    <span class="lbl">Ancho:</span>
+    <input type="range" id="tw" min="25" max="90" value="50" step="1" style="width:70px">
+    <span class="val" id="tw-v">50</span>
+    <div class="sep"></div>
+    <button id="btn-undo">Deshacer</button>
+    <button id="btn-clr" class="no">Limpiar</button>
+    <div class="sep"></div>
+    <button id="btn-load" class="ok">Usar esta pista</button>
+  </div>
+  <div class="cvs-wrap"><canvas id="ec" width="660" height="360"></canvas></div>
+  <div class="hint" id="htxt">Trazo libre: manten clic y arrastra. Modo puntos: clic para cada punto, doble clic para cerrar.</div>
+</div>
+
+<div class="panel" id="panel-physics">
+  <div class="tb" style="margin-bottom:9px">
+    <span class="lbl">Presets:</span>
+    <button class="pre" data-p="f1">Formula 1</button>
+    <button class="pre" data-p="gt">GT Sport</button>
+    <button class="pre" data-p="rally">Rally</button>
+    <button class="pre" data-p="drift">Drift</button>
+    <button class="pre" data-p="kart">Kart</button>
+  </div>
+  <div class="pg">
+    <div class="pg-g"><h3>Motor</h3>
+      <div class="pr"><label>Aceleracion max</label><input type="range" id="pa" min="0.5" max="8" step="0.1" value="3.5"><span class="pv" id="va">3.5</span><span class="pu">m/s2</span></div>
+      <div class="pr"><label>Velocidad max</label><input type="range" id="pm" min="2" max="12" step="0.2" value="5.5"><span class="pv" id="vm">5.5</span><span class="pu">u/s</span></div>
+      <div class="pr"><label>Traccion 0=RWD 1=AWD</label><input type="range" id="ptt" min="0" max="1" step="0.1" value="0.5"><span class="pv" id="vtt">0.5</span></div>
+    </div>
+    <div class="pg-g"><h3>Frenos</h3>
+      <div class="pr"><label>Fuerza frenado</label><input type="range" id="pb" min="1" max="12" step="0.1" value="5"><span class="pv" id="vb">5.0</span><span class="pu">m/s2</span></div>
+      <div class="pr"><label>Bias trasero</label><input type="range" id="pbb" min="0.3" max="0.7" step="0.05" value="0.6"><span class="pv" id="vbb">0.60</span></div>
+      <div class="pr"><label>ABS</label><input type="range" id="pabs" min="0" max="1" step="1" value="0"><span class="pv" id="vabs">off</span></div>
+    </div>
+    <div class="pg-g"><h3>Aerodinamica y peso</h3>
+      <div class="pr"><label>Drag</label><input type="range" id="pd" min="0.90" max="0.999" step="0.001" value="0.97"><span class="pv" id="vd">0.970</span></div>
+      <div class="pr"><label>Downforce</label><input type="range" id="pdf" min="0" max="3" step="0.1" value="0.5"><span class="pv" id="vdf">0.5</span><span class="pu">kN</span></div>
+      <div class="pr"><label>Masa</label><input type="range" id="pms" min="0.5" max="3" step="0.1" value="1.2"><span class="pv" id="vms">1.2</span><span class="pu">t</span></div>
+    </div>
+    <div class="pg-g"><h3>Suspension y agarre</h3>
+      <div class="pr"><label>Agarre lateral</label><input type="range" id="pgr" min="0.01" max="0.2" step="0.005" value="0.08"><span class="pv" id="vgr">0.080</span></div>
+      <div class="pr"><label>Derrape oversteer</label><input type="range" id="po" min="0" max="1" step="0.05" value="0.2"><span class="pv" id="vo">0.20</span></div>
+      <div class="pr"><label>Steering max</label><input type="range" id="pst" min="0.02" max="0.15" step="0.005" value="0.07"><span class="pv" id="vst">0.070</span><span class="pu">rad</span></div>
+    </div>
+    <div class="pg-g"><h3>Neumaticos</h3>
+      <div class="pr"><label>Compuesto</label><input type="range" id="pco" min="0" max="1" step="0.1" value="0.5"><span class="pv" id="vco">medio</span></div>
+      <div class="pr"><label>Degradacion</label><input type="range" id="pdg" min="0" max="0.001" step="0.00005" value="0"><span class="pv" id="vdg">0.0000</span><span class="pu">/s</span></div>
+    </div>
+    <div class="pg-g"><h3>Condiciones pista</h3>
+      <div class="pr"><label>Adherencia</label><input type="range" id="ptg" min="0.3" max="1" step="0.05" value="1"><span class="pv" id="vtg">1.00</span></div>
+      <div class="pr"><label>Viento lateral</label><input type="range" id="pwi" min="0" max="1" step="0.05" value="0"><span class="pv" id="vwi">0.00</span><span class="pu">m/s</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-train">
+  <div class="pg">
+    <div class="pg-g"><h3>Poblacion y elitismo</h3>
+      <div class="pr"><label>Poblacion total</label><input type="range" id="tpop" min="10" max="60" step="1" value="28"><span class="pv" id="vtpop">28</span><span class="pu">autos</span></div>
+      <div class="pr"><label>Elite copias exactas</label><input type="range" id="telite" min="1" max="5" step="1" value="3"><span class="pv" id="vtelite">3</span><span class="pu">autos</span></div>
+      <div class="pr"><label>Inyeccion aleatoria</label><input type="range" id="tinject" min="0" max="0.4" step="0.05" value="0.2"><span class="pv" id="vtinject">20</span><span class="pu">%</span></div>
+    </div>
+    <div class="pg-g"><h3>Mutacion adaptativa</h3>
+      <div class="pr"><label>Mutacion base</label><input type="range" id="tmut" min="0.02" max="0.5" step="0.01" value="0.15"><span class="pv" id="vtmut">0.15</span></div>
+      <div class="pr"><label>Mutacion minima</label><input type="range" id="tmutmin" min="0.01" max="0.2" step="0.01" value="0.05"><span class="pv" id="vtmutmin">0.05</span></div>
+      <div class="pr"><label>Mutacion maxima</label><input type="range" id="tmutmax" min="0.1" max="0.8" step="0.05" value="0.45"><span class="pv" id="vtmutmax">0.45</span></div>
+      <div class="pr"><label>Gens sin mejora p/subir</label><input type="range" id="tstale" min="1" max="8" step="1" value="3"><span class="pv" id="vtstale">3</span><span class="pu">gens</span></div>
+    </div>
+    <div class="pg-g"><h3>Fitness reward</h3>
+      <div class="pr"><label>Peso tiempo vs dist</label><input type="range" id="tftime" min="0" max="1" step="0.05" value="0.7"><span class="pv" id="vtftime">0.70</span></div>
+      <div class="pr"><label>Penalizacion por frame</label><input type="range" id="tfpen" min="0" max="2" step="0.05" value="0.5"><span class="pv" id="vtfpen">0.50</span></div>
+      <div class="pr"><label>Bonus vuelta completa</label><input type="range" id="tfbonus" min="1000" max="20000" step="500" value="8000"><span class="pv" id="vtfbonus">8000</span></div>
+    </div>
+    <div class="pg-g"><h3>Progresion de vueltas</h3>
+      <div class="pr"><label>Vueltas iniciales</label><input type="range" id="tlapst" min="1" max="5" step="1" value="1"><span class="pv" id="vtlapst">1</span><span class="pu">vlts</span></div>
+      <div class="pr"><label>Vueltas maximas</label><input type="range" id="tlapmax" min="1" max="20" step="1" value="8"><span class="pv" id="vtlapmax">8</span><span class="pu">vlts</span></div>
+      <div class="pr"><label>Completados p/avanzar</label><input type="range" id="tlapth" min="0.1" max="1" step="0.05" value="0.5"><span class="pv" id="vtlapth">50</span><span class="pu">%</span></div>
+    </div>
+    <div class="pg-g"><h3>Validacion de vuelta</h3>
+      <div class="pr"><label>Circuito minimo requerido</label><input type="range" id="tlapvalid" min="0.5" max="1" step="0.05" value="0.85"><span class="pv" id="vtlapvalid">85</span><span class="pu">%</span></div>
+      <div class="hint" style="margin-top:4px">La vuelta solo cuenta si el auto recorrio al menos este porcentaje de la pista. Evita que pasen la meta sin correr.</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-sim">
+  <div class="rs">
+    <div class="rc"><div class="rl">Gen / Vueltas</div><div class="rv" id="sg">0 / 1v</div></div>
+    <div class="rc"><div class="rl">Vivos / Fin</div><div class="rv" id="sa">0</div></div>
+    <div class="rc"><div class="rl">Mut actual</div><div class="rv" id="smut">0.15</div></div>
+    <div class="rc"><div class="rl">Mejor vuelta</div><div class="rv" id="sbl">--</div></div>
+    <div class="rc"><div class="rl">Record global</div><div class="rv" id="srec">--</div></div>
+  </div>
+  <div class="info-box" id="info-box">Esperando primera generacion...</div>
+  <div class="fbar">
+    <span class="lbl" style="margin-right:3px">Mostrar:</span>
+    <div class="ft on" data-c="speed">Velocidad</div>
+    <div class="ft on" data-c="thr">Acelerador</div>
+    <div class="ft on" data-c="brk">Freno</div>
+    <div class="ft on" data-c="slip">Derrape</div>
+    <div class="ft on" data-c="laps">Vueltas</div>
+    <div class="ft on" data-c="bl">Mejor vuelta</div>
+    <div class="ft on" data-c="fit">Fitness</div>
+    <div class="ft on" data-c="tyre">Neum%</div>
+    <div class="ft on" data-c="sens">SensMin</div>
+  </div>
+  <div class="tb">
+    <button id="bstart">Iniciar</button>
+    <button id="bnext">Prox. gen</button>
+    <button id="bspd">Vel: 1x</button>
+    <div class="sep"></div>
+    <button id="breset" class="no">Reset total</button>
+  </div>
+  <div class="cvs-wrap" id="scvs-wrap" style="position:relative">
+    <canvas id="sc" width="660" height="360"></canvas>
+    <button class="fsb" id="bfs">Pantalla completa</button>
+  </div>
+  <div class="lb" style="margin-top:8px">
+    <div class="lbh" id="lbh"></div>
+    <div id="lbb"></div>
+  </div>
+  <div class="hint">Vuelta valida = recorrio al menos el % del circuito configurado en Entrenamiento. Verde = top 3 seleccionados.</div>
+</div>
+</div>
+
+<script>
+var CW = 660, CH = 360;
+var ec = document.getElementById('ec');
+var ectx = ec.getContext('2d');
+var sc = document.getElementById('sc');
+var sctx = sc.getContext('2d');
+
+function cvXY(canvas, e) {
+  var r = canvas.getBoundingClientRect();
+  var sx = canvas.width / r.width, sy = canvas.height / r.height;
+  var src = e.touches ? e.touches[0] : e;
+  return { x: (src.clientX - r.left) * sx, y: (src.clientY - r.top) * sy };
+}
+
+document.querySelectorAll('.tab').forEach(function(t) {
+  t.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(x) { x.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function(x) { x.classList.remove('active'); });
+    t.classList.add('active');
+    document.getElementById('panel-' + t.dataset.tab).classList.add('active');
+  });
+});
+
+var dmode = 'free', rpts = [], pmpts = [], drawing = false, undos = [];
+var CL = [], OUT = [], INN = [], loaded = false, TW = 50, startLine = null;
+var TRACK_SEGMENT_COUNT = 0;
+
+document.getElementById('tw').addEventListener('input', function() { TW = +this.value; document.getElementById('tw-v').textContent = this.value; rebuild(); });
+document.getElementById('btn-free').addEventListener('click', function() { dmode = 'free'; document.getElementById('btn-free').classList.add('on'); document.getElementById('btn-pts').classList.remove('on'); });
+document.getElementById('btn-pts').addEventListener('click', function() { dmode = 'pts'; document.getElementById('btn-pts').classList.add('on'); document.getElementById('btn-free').classList.remove('on'); });
+document.getElementById('btn-undo').addEventListener('click', function() { if (dmode === 'free') { rpts = undos.pop() || []; } else if (pmpts.length > 0) { pmpts.pop(); } rebuild(); });
+document.getElementById('btn-clr').addEventListener('click', function() { rpts = []; pmpts = []; undos = []; CL = []; OUT = []; INN = []; loaded = false; startLine = null; drawE(); });
+document.getElementById('btn-load').addEventListener('click', function() {
+  if (CL.length < 20) { alert('Dibuja una pista mas grande primero'); return; }
+  buildStartLine(); loaded = true; resetTraining();
+  document.querySelectorAll('.tab')[3].click();
+  drawS(); buildHead();
+});
+
+ec.addEventListener('mousedown', function(e) { e.preventDefault(); var p = cvXY(ec, e); if (dmode === 'free') { undos.push(rpts.slice()); drawing = true; rpts = [[p.x, p.y]]; } else { if (pmpts.length > 2) { var f = pmpts[0]; if (Math.hypot(p.x - f[0], p.y - f[1]) < 18) { rebuild(); return; } } pmpts.push([p.x, p.y]); rebuild(); } });
+ec.addEventListener('mousemove', function(e) { e.preventDefault(); if (dmode === 'free' && drawing) { var p = cvXY(ec, e); var l = rpts[rpts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) > 6) { rpts.push([p.x, p.y]); rebuild(); } } });
+ec.addEventListener('mouseup', function(e) { e.preventDefault(); drawing = false; });
+ec.addEventListener('mouseleave', function() { drawing = false; });
+ec.addEventListener('dblclick', function(e) { e.preventDefault(); if (dmode === 'pts' && pmpts.length > 2) rebuild(); });
+ec.addEventListener('touchstart', function(e) { e.preventDefault(); var p = cvXY(ec, e); if (dmode === 'free') { undos.push(rpts.slice()); drawing = true; rpts = [[p.x, p.y]]; } else { pmpts.push([p.x, p.y]); rebuild(); } }, { passive: false });
+ec.addEventListener('touchmove', function(e) { e.preventDefault(); if (dmode === 'free' && drawing) { var p = cvXY(ec, e); var l = rpts[rpts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) > 6) { rpts.push([p.x, p.y]); rebuild(); } } }, { passive: false });
+ec.addEventListener('touchend', function(e) { e.preventDefault(); drawing = false; }, { passive: false });
+
+function catmull(pts) {
+  if (pts.length < 2) return pts;
+  var n = pts.length, res = [];
+  for (var i = 0; i < n; i++) {
+    var p0 = pts[(i-1+n)%n], p1 = pts[i], p2 = pts[(i+1)%n], p3 = pts[(i+2)%n];
+    for (var s = 0; s < 16; s++) {
+      var t = s/16, t2 = t*t, t3 = t2*t;
+      res.push([
+        0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
+        0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)
+      ]);
+    }
+  }
+  return res;
+}
+function simp(pts, d) { d = d || 9; if (pts.length < 2) return pts; var r = [pts[0]]; for (var i = 1; i < pts.length; i++) { var l = r[r.length-1]; if (Math.hypot(pts[i][0]-l[0], pts[i][1]-l[1]) >= d) r.push(pts[i]); } return r; }
+function mkOff(center, hw) {
+  var n = center.length, o = [], inn = [];
+  for (var i = 0; i < n; i++) {
+    var pv = center[(i-1+n)%n], nx_ = center[(i+1)%n];
+    var dx = nx_[0]-pv[0], dy = nx_[1]-pv[1], len = Math.hypot(dx,dy)||1;
+    var nrx = -dy/len, nry = dx/len;
+    o.push([center[i][0]+nrx*hw, center[i][1]+nry*hw]);
+    inn.push([center[i][0]-nrx*hw, center[i][1]-nry*hw]);
+  }
+  return { o: o, inn: inn };
+}
+function rebuild() {
+  var src = dmode === 'free' ? rpts : pmpts;
+  if (src.length < 3) { CL = []; OUT = []; INN = []; drawE(); return; }
+  CL = catmull(simp(src, 10));
+  var res = mkOff(CL, TW/2); OUT = res.o; INN = res.inn;
+  TRACK_SEGMENT_COUNT = CL.length;
+  if (loaded) buildStartLine();
+  drawE();
+}
+function buildStartLine() {
+  if (CL.length < 4) return;
+  var idx = Math.floor(CL.length * 0.02);
+  var p = CL[idx], next = CL[(idx+2)%CL.length];
+  var dx = next[0]-p[0], dy = next[1]-p[1], len = Math.hypot(dx,dy)||1;
+  var nx = -dy/len, ny = dx/len;
+  startLine = { x: p[0], y: p[1], idx: idx, nx: nx, ny: ny, ax: p[0]-nx*TW*0.6, ay: p[1]-ny*TW*0.6, bx: p[0]+nx*TW*0.6, by: p[1]+ny*TW*0.6, ang: Math.atan2(dy,dx) };
+}
+function pp(ctx, poly) { ctx.beginPath(); poly.forEach(function(p,i){ if(i===0) ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); }); ctx.closePath(); }
+
+function drawE() {
+  ectx.clearRect(0,0,CW,CH); ectx.fillStyle = '#0d1117'; ectx.fillRect(0,0,CW,CH);
+  for (var x = 0; x < CW; x += 40) for (var y = 0; y < CH; y += 40) { ectx.fillStyle = 'rgba(255,255,255,0.03)'; ectx.fillRect(x,y,1,1); }
+  if (CL.length > 3) {
+    pp(ectx,OUT); ectx.fillStyle='#1e2433'; ectx.fill();
+    pp(ectx,INN); ectx.fillStyle='#0d1117'; ectx.fill();
+    ectx.strokeStyle='rgba(255,255,255,0.06)'; ectx.lineWidth=1; ectx.setLineDash([5,9]); pp(ectx,CL); ectx.stroke(); ectx.setLineDash([]);
+    ectx.strokeStyle='rgba(255,255,255,0.35)'; ectx.lineWidth=1.5; pp(ectx,OUT); ectx.stroke(); pp(ectx,INN); ectx.stroke();
+    if (startLine) {
+      ectx.strokeStyle='rgba(255,235,59,0.6)'; ectx.lineWidth=2.5; ectx.beginPath(); ectx.moveTo(startLine.ax,startLine.ay); ectx.lineTo(startLine.bx,startLine.by); ectx.stroke();
+      ectx.fillStyle='rgba(255,235,59,0.7)'; ectx.font='11px sans-serif'; ectx.fillText('Largada',startLine.x+7,startLine.y-7);
+    }
+  } else {
+    ectx.fillStyle='rgba(255,255,255,0.15)'; ectx.font='14px sans-serif'; ectx.textAlign='center';
+    ectx.fillText(dmode==='free'?'Hace clic y arrastra para dibujar':'Hace clic para agregar puntos',CW/2,CH/2-10);
+    ectx.font='11px sans-serif'; ectx.fillStyle='rgba(255,255,255,0.07)';
+    ectx.fillText('Intentá que el circuito sea cerrado volviendo al inicio',CW/2,CH/2+12); ectx.textAlign='left';
+  }
+  if (dmode==='pts'&&pmpts.length>0) {
+    ectx.strokeStyle='rgba(79,195,247,0.5)'; ectx.lineWidth=1; ectx.setLineDash([4,4]);
+    ectx.beginPath(); pmpts.forEach(function(p,i){ if(i===0)ectx.moveTo(p[0],p[1]);else ectx.lineTo(p[0],p[1]); }); if(pmpts.length>2) ectx.lineTo(pmpts[0][0],pmpts[0][1]); ectx.stroke(); ectx.setLineDash([]);
+    pmpts.forEach(function(p,i){ ectx.beginPath(); ectx.arc(p[0],p[1],5,0,Math.PI*2); ectx.fillStyle=i===0?'#4fc3f7':'#ffeb3b'; ectx.fill(); });
+    if(pmpts.length>2){ ectx.beginPath(); ectx.arc(pmpts[0][0],pmpts[0][1],12,0,Math.PI*2); ectx.strokeStyle='rgba(79,195,247,0.4)'; ectx.lineWidth=1; ectx.stroke(); }
+  }
+  if (dmode==='free'&&rpts.length>1) { ectx.strokeStyle='rgba(79,195,247,0.4)'; ectx.lineWidth=2; ectx.beginPath(); rpts.forEach(function(p,i){ if(i===0)ectx.moveTo(p[0],p[1]);else ectx.lineTo(p[0],p[1]); }); ectx.stroke(); }
+}
+
+var phys = { a:3.5, ms:5.5, tr:0.5, br:5, bb:0.6, abs:0, dr:0.97, df:0.5, ma:1.2, gr:0.08, ov:0.2, st:0.07, co:0.5, dg:0, tg:1, wi:0 };
+var PSETS = {
+  f1:    {a:7,   ms:11, tr:0.3, br:9,  bb:0.55, abs:0, dr:0.985, df:3,   ma:0.7, gr:0.15, ov:0.15, st:0.04, co:0.3, dg:0.0003, tg:1,   wi:0},
+  gt:    {a:4,   ms:7,  tr:0.5, br:6,  bb:0.6,  abs:1, dr:0.975, df:1,   ma:1.3, gr:0.1,  ov:0.25, st:0.06, co:0.5, dg:0.0001, tg:1,   wi:0},
+  rally: {a:5,   ms:6,  tr:0.8, br:5,  bb:0.5,  abs:0, dr:0.965, df:0.3, ma:1.1, gr:0.06, ov:0.5,  st:0.1,  co:0.7, dg:0.0002, tg:0.6, wi:0},
+  drift: {a:5,   ms:6,  tr:0.2, br:4,  bb:0.8,  abs:0, dr:0.97,  df:0.2, ma:1.1, gr:0.04, ov:0.9,  st:0.12, co:0.4, dg:0.0005, tg:0.9, wi:0},
+  kart:  {a:6,   ms:5,  tr:0.4, br:6,  bb:0.65, abs:0, dr:0.98,  df:0.1, ma:0.5, gr:0.12, ov:0.1,  st:0.09, co:0.3, dg:0,      tg:1,   wi:0}
+};
+var PM = [
+  ['pa','va','a',function(v){return v.toFixed(1);}],
+  ['pm','vm','ms',function(v){return v.toFixed(1);}],
+  ['ptt','vtt','tr',function(v){return v.toFixed(1);}],
+  ['pb','vb','br',function(v){return v.toFixed(1);}],
+  ['pbb','vbb','bb',function(v){return v.toFixed(2);}],
+  ['pabs','vabs','abs',function(v){return v>0.5?'on':'off';}],
+  ['pd','vd','dr',function(v){return v.toFixed(3);}],
+  ['pdf','vdf','df',function(v){return v.toFixed(1);}],
+  ['pms','vms','ma',function(v){return v.toFixed(1);}],
+  ['pgr','vgr','gr',function(v){return v.toFixed(3);}],
+  ['po','vo','ov',function(v){return v.toFixed(2);}],
+  ['pst','vst','st',function(v){return v.toFixed(3);}],
+  ['pco','vco','co',function(v){return v<0.35?'blando':v>0.65?'duro':'medio';}],
+  ['pdg','vdg','dg',function(v){return v.toFixed(4);}],
+  ['ptg','vtg','tg',function(v){return v.toFixed(2);}],
+  ['pwi','vwi','wi',function(v){return v.toFixed(2);}]
+];
+PM.forEach(function(row) { var el=document.getElementById(row[0]); if(!el)return; el.addEventListener('input',function(){ phys[row[2]]=parseFloat(this.value); document.getElementById(row[1]).textContent=row[3](phys[row[2]]); }); });
+document.querySelectorAll('.pre').forEach(function(b) {
+  b.addEventListener('click', function() {
+    var p = PSETS[b.dataset.p]; if(!p) return;
+    Object.keys(p).forEach(function(k){ phys[k]=p[k]; });
+    PM.forEach(function(row){ var el=document.getElementById(row[0]); if(!el||phys[row[2]]===undefined)return; el.value=phys[row[2]]; document.getElementById(row[1]).textContent=row[3](phys[row[2]]); });
+  });
+});
+
+var train = { pop:28, elite:3, inject:0.2, mutBase:0.15, mutMin:0.05, mutMax:0.45, stale:3, ftime:0.7, fpen:0.5, fbonus:8000, lapStart:1, lapMax:8, lapThresh:0.5, lapValid:0.85 };
+var TM = [
+  ['tpop','vtpop','pop',function(v){return String(Math.round(v));}],
+  ['telite','vtelite','elite',function(v){return String(Math.round(v));}],
+  ['tinject','vtinject','inject',function(v){return String(Math.round(v*100));}],
+  ['tmut','vtmut','mutBase',function(v){return v.toFixed(2);}],
+  ['tmutmin','vtmutmin','mutMin',function(v){return v.toFixed(2);}],
+  ['tmutmax','vtmutmax','mutMax',function(v){return v.toFixed(2);}],
+  ['tstale','vtstale','stale',function(v){return String(Math.round(v));}],
+  ['tftime','vtftime','ftime',function(v){return v.toFixed(2);}],
+  ['tfpen','vtfpen','fpen',function(v){return v.toFixed(2);}],
+  ['tfbonus','vtfbonus','fbonus',function(v){return String(Math.round(v));}],
+  ['tlapst','vtlapst','lapStart',function(v){return String(Math.round(v));}],
+  ['tlapmax','vtlapmax','lapMax',function(v){return String(Math.round(v));}],
+  ['tlapth','vtlapth','lapThresh',function(v){return String(Math.round(v*100));}],
+  ['tlapvalid','vtlapvalid','lapValid',function(v){return String(Math.round(v*100));}]
+];
+TM.forEach(function(row){ var el=document.getElementById(row[0]); if(!el)return; el.addEventListener('input',function(){ train[row[2]]=parseFloat(this.value); document.getElementById(row[1]).textContent=row[3](train[row[2]]); }); });
+
+var ACOLS = [
+  {k:'speed',l:'Vel',w:'42px'},{k:'thr',l:'Acel%',w:'44px'},{k:'brk',l:'Freno%',w:'46px'},
+  {k:'slip',l:'Slip',w:'42px'},{k:'laps',l:'Vueltas',w:'56px'},{k:'bl',l:'MejVuelta',w:'68px'},
+  {k:'fit',l:'Fitness',w:'58px'},{k:'tyre',l:'Neum%',w:'50px'},{k:'sens',l:'SensMin',w:'52px'}
+];
+var actF = new Set(ACOLS.map(function(c){return c.k;}));
+document.querySelectorAll('.ft').forEach(function(el){ el.addEventListener('click',function(){ var c=el.dataset.c; if(actF.has(c)){actF.delete(c);el.classList.remove('on');}else{actF.add(c);el.classList.add('on');} buildHead(); }); });
+function getCols(){ return [{k:'pos',l:'#',w:'26px'},{k:'dot',l:'',w:'12px'},{k:'nm',l:'Auto',w:'1fr'},{k:'st',l:'Estado',w:'52px'}].concat(ACOLS.filter(function(c){return actF.has(c.k);})); }
+function buildHead(){ var cols=getCols(),h=document.getElementById('lbh'); h.style.gridTemplateColumns=cols.map(function(c){return c.w;}).join(' '); h.innerHTML=cols.map(function(c){return '<span>'+c.l+'</span>';}).join(''); }
+
+var CCOLS=['#4fc3f7','#ffb74d','#f48fb1','#ce93d8','#80cbc4','#fff176','#ff8a65','#a5d6a7','#90caf9','#ef9a9a','#b39ddb','#80deea','#ffe082','#c5e1a5','#ffcc80','#b0bec5','#f8bbd0','#d1c4e9','#b2dfdb','#ffe0b2','#fff9c4','#e1bee7','#bbdefb','#dcedc8','#81c784'];
+var SANGS = [-75,-45,-20,0,20,45,75].map(function(a){return a*Math.PI/180;});
+var SL = 115;
+
+function segi(ax,ay,bx,by,cx,cy,dx,dy){ var d=(bx-ax)*(dy-cy)-(by-ay)*(dx-cx); if(Math.abs(d)<1e-10)return null; var t=((cx-ax)*(dy-cy)-(cy-ay)*(dx-cx))/d,u=((cx-ax)*(by-ay)-(cy-ay)*(bx-ax))/d; if(t>=0&&t<=1&&u>=0&&u<=1)return{t:t,x:ax+t*(bx-ax),y:ay+t*(by-ay)}; return null; }
+function raycast(ox,oy,ang){ var ex=ox+Math.cos(ang)*SL,ey=oy+Math.sin(ang)*SL,best=SL,bx=ex,by=ey; [OUT,INN].forEach(function(poly){ for(var i=0;i<poly.length;i++){var j=(i+1)%poly.length,r=segi(ox,oy,ex,ey,poly[i][0],poly[i][1],poly[j][0],poly[j][1]);if(r&&r.t*SL<best){best=r.t*SL;bx=r.x;by=r.y;}} }); return{dist:best,ex:bx,ey:by}; }
+function nearCL(px,py){ var md=1e18,idx=0; for(var i=0;i<CL.length;i++){var dx=px-CL[i][0],dy=py-CL[i][1],d=dx*dx+dy*dy;if(d<md){md=d;idx=i;}} return idx; }
+function relu(x){return x>0?x:0;}
+function checkCross(x,y,px,py){ if(!startLine)return false; return segi(x,y,px,py,startLine.ax,startLine.ay,startLine.bx,startLine.by)!==null; }
+
+function Net(w){ this.w=w||this.rnd(); }
+Net.prototype.rnd=function(){ var H=10,w={l1:[],b1:[],l2:[],b2:[]}; for(var i=0;i<H;i++){w.l1.push(Array.from({length:9},function(){return(Math.random()-0.5)*2;}));w.b1.push((Math.random()-0.5)*0.5);} for(var i=0;i<3;i++){w.l2.push(Array.from({length:H},function(){return(Math.random()-0.5)*2;}));w.b2.push((Math.random()-0.5)*0.5);} return w; };
+Net.prototype.fwd=function(inp){ var w=this.w; var h=w.l1.map(function(row,i){var s=w.b1[i];for(var j=0;j<inp.length;j++)s+=row[j]*inp[j];return relu(s);}); return w.l2.map(function(row,i){var s=w.b2[i];for(var j=0;j<h.length;j++)s+=row[j]*h[j];return Math.tanh(s);}); };
+Net.prototype.clone=function(){return new Net(JSON.parse(JSON.stringify(this.w)));};
+Net.prototype.mut=function(r){ var nw=JSON.parse(JSON.stringify(this.w)); function m(a){return a.map(function(v){return Math.random()<r?v+(Math.random()-0.5)*0.6:v;});} nw.l1=nw.l1.map(function(x){return m(x);}); nw.b1=m(nw.b1); nw.l2=nw.l2.map(function(x){return m(x);}); nw.b2=m(nw.b2); return new Net(nw); };
+
+function Car(net,id,col){
+  this.id=id; this.col=col; this.net=net||new Net();
+  this.x=startLine.x; this.y=startLine.y; this.ang=startLine.ang;
+  this.spd=0; this.slip=0; this.tw=1;
+  this.alive=true; this.finished=false;
+  this.prevIdx=startLine.idx; this.totalD=0; this.stuck=0;
+  this.laps=0; this.lapTimes=[]; this.lapStartFrame=0; this.fc=0; this.finishFrame=0;
+  this.prevX=this.x; this.prevY=this.y; this.crossCD=0;
+  this.sens=[]; this.thrOut=0; this.brkOut=0; this.msens=1; this._fitness=0;
+
+  // VALIDACION DE VUELTA: bitmap de segmentos visitados en la vuelta actual
+  // Dividimos el circuito en N zonas y marcamos cuales piso el auto
+  this.ZONES = 24;
+  this.zonesHit = new Array(this.ZONES).fill(false);
+  this.lapDistAccum = 0;
+}
+Car.prototype.bestLap=function(){return this.lapTimes.length?Math.min.apply(null,this.lapTimes):Infinity;};
+Car.prototype.calcFitness=function(){
+  var lapBonus=this.laps*train.fbonus;
+  var timePenalty=this.fc*train.fpen;
+  var distBonus=this.totalD*(1-train.ftime);
+  var timeBonus=this.finished?(train.fbonus*currentLaps*2-this.finishFrame*train.ftime):0;
+  return lapBonus+distBonus+timeBonus-timePenalty;
+};
+Car.prototype.lapCoverageOk=function(){
+  // cuantas zonas distintas visito en esta vuelta
+  var hit=0;
+  for(var i=0;i<this.ZONES;i++) if(this.zonesHit[i]) hit++;
+  return (hit/this.ZONES) >= train.lapValid;
+};
+Car.prototype.resetLapTracking=function(){
+  this.zonesHit = new Array(this.ZONES).fill(false);
+  this.lapDistAccum = 0;
+};
+Car.prototype.upd=function(){
+  if(!this.alive)return;
+  this.fc++;
+  var self=this;
+  var sens=SANGS.map(function(a){return raycast(self.x,self.y,self.ang+a);});
+  var minW=sens.reduce(function(a,b){return a.dist<b.dist?a:b;}).dist;
+  if(minW<3.5){this.alive=false;this._fitness=this.calcFitness();return;}
+  this.sens=sens; this.msens=minW/SL;
+
+  var compM=phys.co<0.35?1.15:phys.co>0.65?0.85:1;
+  var eg=phys.gr*phys.tg*compM*this.tw;
+  var dfB=1+phys.df*(this.spd/phys.ms)*0.5;
+  var tg2=eg*dfB;
+  var inp=sens.map(function(s){return s.dist/SL;}); inp.push(this.spd/phys.ms); inp.push(this.slip/30);
+  var out=this.net.fwd(inp);
+  var thr=Math.max(0,Math.min(1,(out[0]+1)/2));
+  var brk=Math.max(0,Math.min(1,(out[1]+1)/2));
+  this.thrOut=thr; this.brkOut=brk;
+  var absA=phys.abs>0.5?Math.max(0.2,1-(this.spd/phys.ms)*0.8):1;
+  var af=(thr*phys.a)/phys.ma;
+  var bf=(brk*phys.br*absA*(0.5+phys.bb))/phys.ma;
+  this.spd=Math.max(0,Math.min(phys.ms,(this.spd+af*0.016-bf*this.spd*0.016)*phys.dr));
+  var sr=this.spd/phys.ms;
+  var mst=phys.st*(1-sr*0.6)*dfB;
+  var si=out[2]*mst*(this.spd>0.2?1:0);
+  this.ang+=si+(this.slip*0.002*sr);
+  this.slip=Math.max(-40,Math.min(40,(this.slip+si*this.spd*phys.ov)*(1-tg2*(0.3+sr*0.4)*0.5)));
+  if(phys.dg>0) this.tw=Math.max(0.4,this.tw-phys.dg*(1+Math.abs(this.slip)*0.05));
+  this.prevX=this.x; this.prevY=this.y;
+  this.x+=Math.cos(this.ang)*this.spd+Math.sin(this.ang)*(this.slip*0.012)-phys.wi*0.004;
+  this.y+=Math.sin(this.ang)*this.spd-Math.cos(this.ang)*(this.slip*0.012);
+
+  var idx=nearCL(this.x,this.y);
+  var n=CL.length;
+  var fwd=(idx-this.prevIdx+n)%n;
+  if(fwd>0&&fwd<n/2){ this.totalD+=fwd; this.stuck=0; } else { this.stuck++; }
+  if(this.stuck>180){this.alive=false;this._fitness=this.calcFitness();return;}
+  this.prevIdx=idx;
+
+  // Marcar zona visitada en la vuelta actual
+  var zone=Math.floor((idx/n)*this.ZONES);
+  this.zonesHit[zone]=true;
+
+  if(this.crossCD>0){this.crossCD--;return;}
+  if(this.fc>60&&checkCross(this.x,this.y,this.prevX,this.prevY)){
+
+    // VALIDAR que recorrio suficiente del circuito
+    if(this.lapCoverageOk()){
+      var lapF=this.fc-this.lapStartFrame;
+      this.lapTimes.push(lapF);
+      if(lapF<gbl) gbl=lapF;
+      this.laps++;
+      this.lapStartFrame=this.fc;
+      this.crossCD=40;
+      this.resetLapTracking();
+      if(this.laps>=currentLaps){
+        this.finished=true; this.finishFrame=this.fc;
+        this._fitness=this.calcFitness(); this.alive=false;
+      }
+    } else {
+      // Cruzo la meta pero sin haber recorrido suficiente: penalizar y resetear
+      this._fitness -= 2000;
+      this.crossCD=60;
+      this.resetLapTracking();
+    }
+  }
+};
+Car.prototype.lapProgress=function(){
+  var hit=0; for(var i=0;i<this.ZONES;i++) if(this.zonesHit[i]) hit++; return hit/this.ZONES;
+};
+Car.prototype.draw=function(isBest,isTop3,showS){
+  var alive=this.alive, finished=this.finished;
+  sctx.save();
+  if(showS&&this.sens.length&&alive){
+    sctx.globalAlpha=0.1;
+    var col=this.col;
+    this.sens.forEach(function(s){sctx.beginPath();sctx.moveTo(this.x,this.y);sctx.lineTo(s.ex,s.ey);sctx.strokeStyle=col;sctx.lineWidth=0.8;sctx.stroke();},this);
+  }
+  if(!alive&&!finished){sctx.globalAlpha=0.07;sctx.translate(this.x,this.y);sctx.rotate(this.ang);sctx.fillStyle=this.col;sctx.beginPath();sctx.moveTo(9,0);sctx.lineTo(-6,5);sctx.lineTo(-3,0);sctx.lineTo(-6,-5);sctx.closePath();sctx.fill();sctx.restore();return;}
+  sctx.globalAlpha=finished?0.5:1;
+  if(Math.abs(this.slip)>8){sctx.globalAlpha=finished?0.15:0.25;sctx.fillStyle=this.col;sctx.beginPath();sctx.arc(this.x-Math.cos(this.ang)*5,this.y-Math.sin(this.ang)*5,4,0,Math.PI*2);sctx.fill();}
+  sctx.globalAlpha=finished?0.5:1;
+  sctx.translate(this.x,this.y);sctx.rotate(this.ang);
+  sctx.fillStyle=isBest?'#ffeb3b':isTop3?'#81c784':this.col;
+  sctx.beginPath();sctx.moveTo(9,0);sctx.lineTo(-6,5);sctx.lineTo(-3,0);sctx.lineTo(-6,-5);sctx.closePath();sctx.fill();
+  if(isBest){sctx.font='bold 8px sans-serif';sctx.fillStyle='#000';sctx.textAlign='center';sctx.fillText('1',1,3);}
+
+  // Barra de progreso de vuelta actual (arco sobre el auto)
+  var prog=this.lapProgress();
+  if(prog>0&&alive){
+    sctx.globalAlpha=0.7;
+    sctx.beginPath();sctx.arc(0,0,7,-Math.PI/2,-Math.PI/2+prog*Math.PI*2);
+    sctx.strokeStyle=prog>=train.lapValid?'#81c784':'#4fc3f7';
+    sctx.lineWidth=1.5;sctx.stroke();
+  }
+  sctx.restore();
+};
+
+var gen=0, gbl=Infinity, sspd=1, running=false, animId=null, cars=[], top3ids=new Set();
+var currentLaps=1, currentMut=0.15, prevBestFitness=-Infinity, staleCount=0;
+
+function resetTraining(){ gen=0;gbl=Infinity;cars=[];top3ids=new Set();currentLaps=train.lapStart;currentMut=train.mutBase;prevBestFitness=-Infinity;staleCount=0;document.getElementById('info-box').textContent='Entrenamiento reiniciado.'; }
+
+function selectTop3(carList){
+  var finished=carList.filter(function(c){return c.finished&&c.laps>=currentLaps;});
+  if(finished.length>=3){ finished.sort(function(a,b){return a.finishFrame-b.finishFrame;}); return{mode:'tiempo',selected:finished.slice(0,3)}; }
+  if(finished.length>0){ var rest=carList.filter(function(c){return!c.finished;}).sort(function(a,b){return b._fitness-a._fitness;}); finished.sort(function(a,b){return a.finishFrame-b.finishFrame;}); return{mode:'mixto',selected:finished.concat(rest).slice(0,3)}; }
+  return{mode:'fitness',selected:carList.slice().sort(function(a,b){return b._fitness-a._fitness;}).slice(0,3)};
+}
+
+function newGen(){
+  if(!loaded||CL.length<10)return;
+  var selResult={mode:'init',selected:[]};
+  if(cars.length>0){
+    cars.forEach(function(c){if(c.alive){c.alive=false;c._fitness=c.calcFitness();}});
+    selResult=selectTop3(cars);
+    var bestFit=Math.max.apply(null,cars.map(function(c){return c._fitness;}));
+    var finCount=cars.filter(function(c){return c.finished;}).length;
+    var finRate=finCount/cars.length;
+    var improved=bestFit>prevBestFitness*1.01;
+    if(improved){staleCount=0;currentMut=Math.max(train.mutMin,currentMut*0.85);}
+    else{staleCount++;if(staleCount>=train.stale){currentMut=Math.min(train.mutMax,currentMut*1.4);staleCount=0;}}
+    prevBestFitness=Math.max(prevBestFitness,bestFit);
+    if(finRate>=train.lapThresh&&currentLaps<train.lapMax){currentLaps++;staleCount=0;currentMut=train.mutBase;}
+    var modeStr=selResult.mode==='tiempo'?'top 3 por tiempo':selResult.mode==='mixto'?'mixto tiempo+fitness':'top 3 por fitness';
+    var selStr=selResult.selected.map(function(c){return c.finished?(c.finishFrame/60).toFixed(2)+'s':'fit:'+Math.round(c._fitness);}).join(' / ');
+    var tagClass=improved?'tag-better':staleCount>0?'tag-same':'tag-worse';
+    var tagTxt=improved?'mejoro':('estancado x'+staleCount);
+    var progTxt=(finRate>=train.lapThresh&&currentLaps<=train.lapMax)?('<span class="tag tag-prog">subio a '+currentLaps+'v</span>'):'';
+    document.getElementById('info-box').innerHTML=
+      'Gen <span>'+gen+'</span> <span class="tag '+tagClass+'">'+tagTxt+'</span>'+progTxt+
+      ' &nbsp;|&nbsp; criterio: <span>'+modeStr+'</span> &nbsp;|&nbsp; sel: <span>'+selStr+'</span><br>'+
+      'Mut: <span>'+currentMut.toFixed(3)+'</span> &nbsp;|&nbsp; Vueltas obj: <span>'+currentLaps+'</span>'+
+      ' &nbsp;|&nbsp; Completaron: <span>'+finCount+'/'+cars.length+' ('+Math.round(finRate*100)+'%)</span>'+
+      ' &nbsp;|&nbsp; Cobertura min: <span>'+Math.round(train.lapValid*100)+'%</span>';
+  }
+  gen++;
+  top3ids=new Set(selResult.selected.map(function(c){return c.id;}));
+  var eliteNets=selResult.selected.map(function(c){return c.net;});
+  var newNets=[];
+  var eliteCount=Math.min(train.elite,eliteNets.length);
+  for(var i=0;i<eliteCount;i++) newNets.push(eliteNets[i%eliteNets.length].clone());
+  for(var i=0;i<eliteCount;i++) newNets.push(eliteNets[i%eliteNets.length].mut(currentMut*0.3));
+  for(var i=0;i<eliteCount;i++) newNets.push(eliteNets[i%eliteNets.length].mut(currentMut*0.6));
+  var injectN=Math.floor(train.pop*train.inject);
+  for(var i=0;i<injectN;i++) newNets.push(new Net());
+  while(newNets.length<train.pop){ var base=eliteNets.length>0?eliteNets[Math.floor(Math.random()*eliteNets.length)]:new Net(); newNets.push(base.mut(currentMut*(0.7+Math.random()*0.6))); }
+  while(newNets.length>train.pop) newNets.pop();
+  cars=newNets.map(function(n,i){return new Car(n,i,CCOLS[i%CCOLS.length]);});
+}
+
+function drawS(){
+  sctx.clearRect(0,0,CW,CH);sctx.fillStyle='#0d1117';sctx.fillRect(0,0,CW,CH);
+  for(var x=0;x<CW;x+=40)for(var y=0;y<CH;y+=40){sctx.fillStyle='rgba(255,255,255,0.025)';sctx.fillRect(x,y,1,1);}
+  if(!loaded||CL.length<10){sctx.fillStyle='rgba(255,255,255,0.12)';sctx.font='13px sans-serif';sctx.textAlign='center';sctx.fillText('Dibuja tu pista y presiona Usar esta pista',CW/2,CH/2);sctx.textAlign='left';return;}
+  pp(sctx,OUT);sctx.fillStyle='#1e2433';sctx.fill();
+  pp(sctx,INN);sctx.fillStyle='#0d1117';sctx.fill();
+  sctx.strokeStyle='rgba(255,255,255,0.04)';sctx.lineWidth=1;sctx.setLineDash([5,9]);pp(sctx,CL);sctx.stroke();sctx.setLineDash([]);
+  sctx.strokeStyle='rgba(255,255,255,0.28)';sctx.lineWidth=1.5;pp(sctx,OUT);sctx.stroke();pp(sctx,INN);sctx.stroke();
+  if(startLine){sctx.strokeStyle='rgba(255,235,59,0.55)';sctx.lineWidth=2.5;sctx.beginPath();sctx.moveTo(startLine.ax,startLine.ay);sctx.lineTo(startLine.bx,startLine.by);sctx.stroke();sctx.fillStyle='rgba(255,235,59,0.55)';sctx.font='10px sans-serif';sctx.fillText('Largada',startLine.x+7,startLine.y-7);}
+  var showS=actF.has('sens');
+  var alive=cars.filter(function(c){return c.alive;});
+  var bestA=alive.reduce(function(a,b){return a&&a._fitness>b._fitness?a:b;},null)||alive[0]||null;
+  cars.filter(function(c){return!c.alive&&!c.finished;}).forEach(function(c){c.draw(false,false,false);});
+  cars.filter(function(c){return c.finished;}).forEach(function(c){c.draw(false,top3ids.has(c.id),false);});
+  alive.filter(function(c){return c!==bestA;}).forEach(function(c){c.draw(false,top3ids.has(c.id),showS);});
+  if(bestA)bestA.draw(true,top3ids.has(bestA.id),showS);
+  sctx.fillStyle='rgba(255,255,255,0.07)';sctx.font='10px sans-serif';
+  sctx.fillText('Gen '+gen+'  |  '+alive.length+' vivos  |  '+cars.filter(function(c){return c.finished;}).length+' fin  |  obj: '+currentLaps+'v  |  cobertura min: '+Math.round(train.lapValid*100)+'%',8,CH-8);
+}
+
+function fmtF(f){if(!isFinite(f))return'--';return(f/60).toFixed(2)+'s';}
+var lbTick=0;
+function updateLB(){
+  if(++lbTick%4!==0)return;
+  var cols=getCols();
+  var sorted=cars.slice().sort(function(a,b){if(a.finished&&!b.finished)return -1;if(!a.finished&&b.finished)return 1;if(a.finished&&b.finished)return a.finishFrame-b.finishFrame;return b._fitness-a._fitness;});
+  var aliveN=cars.filter(function(c){return c.alive;}).length;
+  var finN=cars.filter(function(c){return c.finished;}).length;
+  var allBL=cars.map(function(c){return c.bestLap();});
+  var bestBL=allBL.length?Math.min.apply(null,allBL):Infinity;
+  document.getElementById('sg').textContent=gen+' / '+currentLaps+'v';
+  document.getElementById('sa').textContent=aliveN+'/'+cars.length;
+  document.getElementById('smut').textContent=currentMut.toFixed(3);
+  document.getElementById('sbl').textContent=fmtF(isFinite(bestBL)?bestBL:Infinity);
+  document.getElementById('srec').textContent=fmtF(gbl);
+  document.getElementById('lbb').innerHTML=sorted.slice(0,16).map(function(c,i){
+    var isLeader=i===0&&c.alive, isT3=top3ids.has(c.id);
+    var cells=cols.map(function(col){
+      if(col.k==='pos')return'<span style="font-weight:500;font-size:10px;color:var(--color-text-tertiary)">'+(i+1)+'</span>';
+      if(col.k==='dot')return'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c.col+'"></span></span>';
+      if(col.k==='nm')return'<span>Auto '+(c.id+1)+'</span>';
+      if(col.k==='st'){if(c.finished)return'<span class="badge bq">fin '+c.laps+'v</span>';return'<span class="badge '+(c.alive?'ba':'bd')+'">'+(c.alive?'vivo':'crash')+'</span>';}
+      if(col.k==='speed')return'<span>'+c.spd.toFixed(1)+'</span>';
+      if(col.k==='thr')return'<span style="color:'+(c.thrOut>0.6?'#81c784':'inherit')+'">'+Math.round(c.thrOut*100)+'%</span>';
+      if(col.k==='brk')return'<span style="color:'+(c.brkOut>0.5?'#ef5350':'inherit')+'">'+Math.round(c.brkOut*100)+'%</span>';
+      if(col.k==='slip')return'<span style="color:'+(Math.abs(c.slip)>20?'#ffb74d':'inherit')+'">'+c.slip.toFixed(1)+'</span>';
+      if(col.k==='laps'){var pct=Math.round(c.lapProgress()*100);return'<span>'+c.laps+'/'+currentLaps+' <span style="color:var(--color-text-tertiary);font-size:10px">('+pct+'%)</span></span>';}
+      if(col.k==='bl'){var bl=c.bestLap();return'<span style="color:'+(bl===gbl&&isFinite(bl)?'#ce93d8':'inherit')+'">'+fmtF(bl)+'</span>';}
+      if(col.k==='fit')return'<span>'+Math.round(c._fitness||c.calcFitness())+'</span>';
+      if(col.k==='tyre')return'<span style="color:'+(c.tw<0.6?'#ef5350':c.tw<0.8?'#ffb74d':'inherit')+'">'+Math.round(c.tw*100)+'%</span>';
+      if(col.k==='sens')return'<span style="color:'+(c.msens<0.15?'#ef5350':'inherit')+'">'+Math.round(c.msens*100)+'%</span>';
+      return'<span></span>';
+    });
+    var cls='lbr'+(isLeader?' leader':isT3?' top3':'')+(!c.alive&&!c.finished?' dead':'');
+    return'<div class="'+cls+'" style="grid-template-columns:'+cols.map(function(c){return c.w;}).join(' ')+'">'+cells.join('')+'</div>';
+  }).join('');
+}
+
+function loop(){ for(var s=0;s<sspd;s++){ cars.forEach(function(c){c.upd();}); if(cars.filter(function(c){return c.alive;}).length===0&&running)newGen(); } drawS();updateLB(); if(running)animId=requestAnimationFrame(loop); }
+
+document.getElementById('bstart').addEventListener('click',function(){ if(!loaded){alert('Primero dibuja y carga una pista');return;} if(running){running=false;cancelAnimationFrame(animId);this.textContent='Iniciar';this.classList.remove('on');}else{running=true;if(cars.length===0)newGen();this.textContent='Pausar';this.classList.add('on');animId=requestAnimationFrame(loop);} });
+document.getElementById('bnext').addEventListener('click',function(){if(!loaded)return;newGen();if(!running){drawS();updateLB();}});
+document.getElementById('breset').addEventListener('click',function(){ var w=running; if(running){running=false;cancelAnimationFrame(animId);document.getElementById('bstart').textContent='Iniciar';document.getElementById('bstart').classList.remove('on');} resetTraining(); if(w){running=true;document.getElementById('bstart').textContent='Pausar';document.getElementById('bstart').classList.add('on');newGen();animId=requestAnimationFrame(loop);}else{drawS();updateLB();} });
+var spds=[1,3,8,20];var si=0;
+document.getElementById('bspd').addEventListener('click',function(){si=(si+1)%spds.length;sspd=spds[si];this.textContent='Vel: '+spds[si]+'x';});
+document.getElementById('bfs').addEventListener('click',function(){var w=document.getElementById('scvs-wrap');if(document.fullscreenElement)document.exitFullscreen();else if(w.requestFullscreen)w.requestFullscreen();});
+document.addEventListener('fullscreenchange',function(){document.getElementById('bfs').textContent=document.fullscreenElement?'Salir':'Pantalla completa';});
+
+drawE();drawS();buildHead();
+</script>
