@@ -28,7 +28,10 @@ function screenToWorld(sx, sy) { return { x: (sx - view.x) / view.zoom, y: (sy -
 
 // Interactions
 grabbedIdx = -1;
+grabbedWallIdx = -1;
 isEditing = true;
+editorMode = 'track'; // 'track' or 'walls'
+deathWalls = []; // Each wall is an array of points [[x,y], [x,y], ...]
 
 function getMousePos(e) {
     var r = sc.getBoundingClientRect();
@@ -47,26 +50,42 @@ sc.addEventListener('mousedown', function (e) {
     }
 
     if (e.button === 0 && isEditing) {
-        var found = -1;
-        for (var i = 0; i < pmpts.length; i++) {
-            if (Math.hypot(w.x - pmpts[i][0], w.y - pmpts[i][1]) < 12 / view.zoom) {
-                found = i;
-                break;
-            }
-        }
-
-        if (found !== -1) {
-            grabbedIdx = found;
-        } else {
-            if (pmpts.length > 2) {
-                var f = pmpts[0];
-                if (Math.hypot(w.x - f[0], w.y - f[1]) < 20 / view.zoom) {
-                    rebuild();
-                    return;
+        if (editorMode === 'track') {
+            var found = -1;
+            for (var i = 0; i < pmpts.length; i++) {
+                if (Math.hypot(w.x - pmpts[i][0], w.y - pmpts[i][1]) < 12 / view.zoom) {
+                    found = i; break;
                 }
             }
-            pmpts.push([w.x, w.y]);
-            rebuild();
+            if (found !== -1) grabbedIdx = found;
+            else { pmpts.push([w.x, w.y]); rebuild(); }
+        } else if (editorMode === 'walls') {
+            // New wall node or grab existing
+            var foundWall = -1, foundNode = -1;
+            for (var i = 0; i < deathWalls.length; i++) {
+                for (var j = 0; j < deathWalls[i].length; j++) {
+                    if (Math.hypot(w.x - deathWalls[i][j][0], w.y - deathWalls[i][j][1]) < 12 / view.zoom) {
+                        foundWall = i; foundNode = j; break;
+                    }
+                }
+                if (foundWall !== -1) break;
+            }
+            
+            if (foundWall !== -1) {
+                grabbedIdx = foundNode; 
+                grabbedWallIdx = foundWall;
+            } else {
+                // If double click logic is needed, we could close walls. 
+                // For now, let's just make it simple: 
+                // If there's an ongoing wall (active last one), we add to it.
+                // Or start a new one if we use a keyboard shortcut or button.
+                // Simplified: All walls are one array for now or we use a "New Wall" button.
+                // Better: Just one big polyline that we can "break" with a button?
+                // Let's use the simplest: clicks add points to the LAST wall.
+                if (deathWalls.length === 0) deathWalls.push([]);
+                deathWalls[deathWalls.length-1].push([w.x, w.y]);
+                render();
+            }
         }
     }
 });
@@ -85,14 +104,20 @@ sc.addEventListener('mousemove', function (e) {
     }
 
     if (grabbedIdx !== -1) {
-        pmpts[grabbedIdx] = [w.x, w.y];
-        rebuild();
+        if (editorMode === 'track') {
+            pmpts[grabbedIdx] = [w.x, w.y];
+            rebuild();
+        } else if (editorMode === 'walls' && grabbedWallIdx !== -1) {
+            deathWalls[grabbedWallIdx][grabbedIdx] = [w.x, w.y];
+            render();
+        }
     }
 });
 
 sc.addEventListener('mouseup', function () {
     view.panning = false;
     grabbedIdx = -1;
+    grabbedWallIdx = -1;
 });
 
 sc.addEventListener('wheel', function (e) {
@@ -154,7 +179,43 @@ document.getElementById('tw').addEventListener('input', function () {
     rebuild();
 });
 
-document.getElementById('btn-undo').addEventListener('click', function () { pmpts.pop(); rebuild(); });
+// Mode Management
+document.getElementById('btn-mode-track').addEventListener('click', function() {
+    editorMode = 'track';
+    this.classList.add('active');
+    document.getElementById('btn-mode-walls').classList.remove('active');
+    document.getElementById('editor-hint').innerHTML = 'Haz clic para agregar puntos.<br>Arrastra puntos para editar.<br>Doble clic para cerrar.';
+});
+document.getElementById('btn-mode-walls').addEventListener('click', function() {
+    editorMode = 'walls';
+    this.classList.add('active');
+    document.getElementById('btn-mode-track').classList.remove('active');
+    document.getElementById('editor-hint').innerHTML = 'Haz clic para crear un muro rojo.<br>Cualquier auto que lo toque morirá.<br>Presiona "Nuevo Muro" para empezar otro.';
+});
+document.getElementById('btn-clr-walls').addEventListener('click', function() {
+    if(confirm('¿Borrar todos los muros de muerte?')) {
+        deathWalls = [];
+        render();
+    }
+});
+
+document.getElementById('btn-new-wall').addEventListener('click', function() {
+    deathWalls.push([]);
+    editorMode = 'walls';
+    document.getElementById('btn-mode-walls').classList.add('active');
+    document.getElementById('btn-mode-track').classList.remove('active');
+    document.getElementById('editor-hint').innerHTML = 'Iniciando nuevo muro... Haz clic en el mapa.';
+});
+
+document.getElementById('btn-undo').addEventListener('click', function () { 
+    if (editorMode === 'track') pmpts.pop(); 
+    else if (deathWalls.length > 0) {
+        var last = deathWalls[deathWalls.length-1];
+        if (last.length > 0) last.pop();
+        if (last.length === 0) deathWalls.pop();
+    }
+    rebuild(); 
+});
 document.getElementById('btn-clr').addEventListener('click', function () { pmpts = []; CL = []; OUT = []; INN = []; loaded = false; startLine = null; render(); });
 document.getElementById('btn-load').addEventListener('click', function () {
     if (CL.length < 20) { alert('Dibuja una pista mas grande primero (mínimo 20 segmentos)'); return; }
@@ -168,7 +229,7 @@ document.getElementById('btn-load').addEventListener('click', function () {
 // Save Track logic
 document.getElementById('btn-save').addEventListener('click', function () {
     if (pmpts.length < 3) { alert('No hay pista para guardar.'); return; }
-    var data = { pmpts: pmpts, TW: TW };
+    var data = { pmpts: pmpts, TW: TW, deathWalls: deathWalls };
     var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -196,6 +257,9 @@ document.getElementById('track-file').addEventListener('change', function (e) {
                     TW = data.TW;
                     document.getElementById('tw').value = TW;
                     document.getElementById('tw-v').textContent = TW;
+                }
+                if (data.deathWalls) {
+                    deathWalls = data.deathWalls;
                 }
                 rebuild();
                 alert('Pista cargada con éxito.');
@@ -375,6 +439,8 @@ function render() {
     sctx.restore();
     if (isEditing) drawEditor();
     else drawSim();
+
+    drawDeathWalls(sctx);
     
     if (!isEditing) drawCanvasHUD(sctx);
 }
@@ -390,13 +456,86 @@ function drawEditor() {
     pmpts.forEach(function (p, i) {
         sctx.beginPath(); sctx.arc(p[0], p[1], 5 / view.zoom, 0, Math.PI * 2);
         sctx.fillStyle = (i === 0) ? '#00e676' : '#ffb74d'; sctx.fill();
-        if (grabbedIdx === i) { sctx.strokeStyle = '#fff'; sctx.lineWidth = 2 / view.zoom; sctx.stroke(); }
+        if (grabbedIdx === i && grabbedWallIdx === -1) { sctx.strokeStyle = '#fff'; sctx.lineWidth = 2 / view.zoom; sctx.stroke(); }
     });
     sctx.restore();
 }
+
+function drawDeathWalls(ctx) {
+    ctx.save();
+    applyView(ctx);
+    
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    deathWalls.forEach(function(wall, wIdx) {
+        if (wall.length < 2) return;
+        
+        ctx.beginPath();
+        ctx.strokeStyle = '#ff5252';
+        ctx.lineWidth = 6 / view.zoom;
+        wall.forEach(function(p, i) {
+            if (i === 0) ctx.moveTo(p[0], p[1]);
+            else ctx.lineTo(p[0], p[1]);
+        });
+        ctx.stroke();
+        
+        // Inner white glow for the wall
+        ctx.beginPath();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1 / view.zoom;
+        wall.forEach(function(p, i) {
+            if (i === 0) ctx.moveTo(p[0], p[1]);
+            else ctx.lineTo(p[0], p[1]);
+        });
+        ctx.stroke();
+
+        // Nodes in editor mode
+        if (isEditing && editorMode === 'walls') {
+            wall.forEach(function(p, i) {
+                ctx.beginPath();
+                ctx.arc(p[0], p[1], 4 / view.zoom, 0, Math.PI * 2);
+                ctx.fillStyle = (grabbedIdx === i && grabbedWallIdx === wIdx) ? '#fff' : '#ff5252';
+                ctx.fill();
+            });
+        }
+    });
+    
+    ctx.restore();
+}
+function drawSafetyZone(ctx) {
+    if (!loaded || CL.length < 10) return;
+    ctx.save();
+    var limit = (TW / 2) * (train.safety || 2.0);
+    
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // Draw several layers for a gradient effect
+    var layers = [1.0, 0.8, 0.6];
+    var opacities = [0.03, 0.05, 0.08];
+    
+    layers.forEach(function(factor, i) {
+        ctx.beginPath();
+        CL.forEach(function(p, idx) {
+            if (idx === 0) ctx.moveTo(p[0], p[1]);
+            else ctx.lineTo(p[0], p[1]);
+        });
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(255, 50, 50, ' + opacities[i] + ')';
+        ctx.lineWidth = limit * 2 * factor;
+        ctx.stroke();
+    });
+    
+    ctx.restore();
+}
+
 function drawSim() {
     sctx.save(); applyView(sctx);
     if (!loaded || CL.length < 10) { sctx.restore(); return; }
+    
+    drawSafetyZone(sctx); // Draw the new safety gradient
+    
     pp(sctx, OUT); sctx.fillStyle = '#141418'; sctx.fill();
     pp(sctx, INN); sctx.fillStyle = '#050507'; sctx.fill();
     sctx.strokeStyle = 'rgba(255,255,255,0.04)'; sctx.setLineDash([5, 9]); pp(sctx, CL); sctx.stroke(); sctx.setLineDash([]);
@@ -414,62 +553,87 @@ function drawSim() {
 
 // Controller Mapping
 var physMap = [
-    ['pa', 'a'], ['pm', 'ms'], ['ptt', 'tt'], ['pb', 'br'], ['pbb', 'bb'], ['pabs', 'abs'],
-    ['pd', 'dr'], ['pdf', 'df'], ['pms', 'ma'], ['pgr', 'gr'], ['po', 'ov'], ['pst', 'st'],
-    ['pco', 'co'], ['pdg', 'dg'], ['ptg', 'tg'], ['psm', 'sm']
+    ['pvmax', 'vmax'], ['paccel', 'accel'], ['pmaneuver', 'maneuver']
 ];
+
 physMap.forEach(function (item) {
     var el = document.getElementById(item[0]);
     if (el) el.addEventListener('input', function () {
-        var val = parseFloat(this.value); phys[item[1]] = val;
-        var label = document.getElementById('v' + item[0]);
-        if (label) {
-            if (item[1] === 'abs') label.textContent = val > 0.5 ? 'on' : 'off';
-            else if (item[1] === 'co') label.textContent = val < 0.3 ? 'blando' : val > 0.7 ? 'duro' : 'medio';
-            else label.textContent = val.toFixed(3);
-        }
+        var val = parseFloat(this.value); 
+        phys[item[1]] = val;
+        var label = document.getElementById('v' + item[1]);
+        if (label) label.textContent = (item[1] === 'accel') ? val.toFixed(1) : Math.round(val);
+        updateAutoDashboard();
+    });
+});
+
+// Drivetrain & Engine Position Selectors
+document.querySelectorAll('.sel-dt').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.sel-dt').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        phys.drivetrain = this.dataset.dt;
+        updateAutoDashboard();
+    });
+});
+
+document.querySelectorAll('.sel-eng').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.sel-eng').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        phys.engine = this.dataset.eng;
         updateAutoDashboard();
     });
 });
 
 window.updateAutoDashboard = function() {
-    var vmax = phys.ms * phys.sm;
-    var power = phys.a * 100;
-    var weight = phys.ma * 1000;
+    document.getElementById('dash-vmax').textContent = Math.round(phys.vmax);
+    document.getElementById('dash-accel').textContent = phys.accel.toFixed(1);
+    document.getElementById('dash-maneuver').textContent = Math.round(phys.maneuver);
+    document.getElementById('dash-traction').textContent = phys.drivetrain + " (" + phys.engine + ")";
     
-    // Estimate 0-100 time: Time = V / (Accel * dT)
-    // 100 km/h is 10 units of speed in simulation (scaled by sm/10)
-    var accelTime = (10 / (phys.sm/10)) / (phys.a * 0.016) / 60;
+    // Update labels if needed
+    document.getElementById('vvmax').textContent = Math.round(phys.vmax);
+    document.getElementById('vaccel').textContent = phys.accel.toFixed(1);
+    document.getElementById('vmaneuver').textContent = Math.round(phys.maneuver);
     
-    document.getElementById('dash-vmax').textContent = Math.round(vmax);
-    document.getElementById('dash-accel').textContent = accelTime.toFixed(2);
-    document.getElementById('dash-power').textContent = Math.round(power);
-    document.getElementById('dash-weight').textContent = Math.round(weight);
-    
-    // Determine class
+    // Performance Class logic
     var pClass = "Prototype";
-    if (vmax > 100) pClass = "Hypercar";
-    else if (vmax > 80) pClass = "Supercar";
-    else if (vmax > 60) pClass = "Sport";
+    if (phys.vmax > 320) pClass = "Hypercar";
+    else if (phys.vmax > 260) pClass = "Supercar";
+    else if (phys.vmax > 180) pClass = "Sport";
     else pClass = "Compact";
-    
     document.getElementById('auto-class').textContent = "Performance Class: " + pClass;
 };
 
 var PSETS = {
-    f1: { a: 6.5, ms: 10.5, tt: 0.1, br: 10, bb: 0.55, abs: 0, dr: 0.98, df: 2.5, ma: 0.8, gr: 0.18, ov: 0.1, st: 0.09, co: 0.2, dg: 0.0005, tg: 1, sm: 10 },
-    f1_2026: { a: 7.8, ms: 11.8, tt: 0.1, br: 11.5, bb: 0.55, abs: 1, dr: 0.985, df: 2.9, ma: 0.7, gr: 0.2, ov: 0.1, st: 0.08, co: 0.2, dg: 0.0004, tg: 1, sm: 30 },
-    gt: { a: 4.5, ms: 8.5, tt: 0.2, br: 8, bb: 0.6, abs: 1, dr: 0.97, df: 1.5, ma: 1.3, gr: 0.12, ov: 0.15, st: 0.07, co: 0.5, dg: 0.0002, tg: 1, sm: 22 },
-    rally: { a: 5.5, ms: 6.5, tt: 0.5, br: 6, bb: 0.65, abs: 0, dr: 0.96, df: 0.8, ma: 1.2, gr: 0.06, ov: 0.4, st: 0.12, co: 0.8, dg: 0.0008, tg: 0.6, sm: 20 },
-    drift: { a: 4.0, ms: 6.0, tt: 0.1, br: 5, bb: 0.7, abs: 0, dr: 0.97, df: 0.3, ma: 1.1, gr: 0.03, ov: 0.8, st: 0.15, co: 0.9, dg: 0.001, tg: 0.8, sm: 18 },
-    kart: { a: 3.0, ms: 4.5, tt: 0.0, br: 4, bb: 0.5, abs: 0, dr: 0.95, df: 0.1, ma: 0.5, gr: 0.1, ov: 0.3, st: 0.1, co: 0.5, dg: 0, tg: 1, sm: 12 }
+    f1: { vmax: 340, accel: 2.4, maneuver: 95, drivetrain: 'RWD', engine: 'M' },
+    f1_2026: { vmax: 365, accel: 2.1, maneuver: 98, drivetrain: 'AWD', engine: 'M' },
+    gt: { vmax: 280, accel: 3.5, maneuver: 85, drivetrain: 'RWD', engine: 'M' },
+    rally: { vmax: 210, accel: 4.2, maneuver: 75, drivetrain: '4WD', engine: 'F' },
+    drift: { vmax: 190, accel: 4.8, maneuver: 65, drivetrain: 'RWD', engine: 'F' },
+    kart: { vmax: 140, accel: 5.5, maneuver: 90, drivetrain: 'RWD', engine: 'R' }
 };
 
 document.querySelectorAll('.pre').forEach(function (b) {
     b.addEventListener('click', function () {
         var p = PSETS[b.dataset.p]; if (!p) return;
         Object.keys(p).forEach(function (k) { phys[k] = p[k]; });
-        physMap.forEach(function (item) { var el = document.getElementById(item[0]); if (el) { el.value = phys[item[1]]; el.dispatchEvent(new Event('input')); } });
+        
+        // Update Sliders
+        document.getElementById('pvmax').value = phys.vmax;
+        document.getElementById('paccel').value = phys.accel;
+        document.getElementById('pmaneuver').value = phys.maneuver;
+        
+        // Update Button Groups
+        document.querySelectorAll('.sel-dt').forEach(function(btn) { 
+            btn.classList.toggle('active', btn.dataset.dt === phys.drivetrain); 
+        });
+        document.querySelectorAll('.sel-eng').forEach(function(btn) { 
+            btn.classList.toggle('active', btn.dataset.eng === phys.engine); 
+        });
+
+        updateAutoDashboard();
     });
 });
 
@@ -477,7 +641,8 @@ var trainMap = [
     ['tpop', 'pop'], ['telite', 'elite'], ['tinject', 'inject'], ['tmut', 'mutBase'],
     ['tmutmin', 'mutMin'], ['tmutmax', 'mutMax'], ['tstale', 'stale'],
     ['tftime', 'ftime'], ['tfpen', 'fpen'], ['tfbonus', 'fbonus'],
-    ['tlapst', 'lapStart'], ['tlapmax', 'lapMax'], ['tlapvalid', 'lapValid']
+    ['tlapst', 'lapStart'], ['tlapmax', 'lapMax'], ['tlapvalid', 'lapValid'],
+    ['tsfty', 'safety'], ['tstaglimit', 'stagLimit']
 ];
 trainMap.forEach(function (item) {
     var el = document.getElementById(item[0]);
@@ -486,43 +651,25 @@ trainMap.forEach(function (item) {
         var label = document.getElementById('v' + item[0]);
         if (label) {
             if (item[1].includes('inject') || item[1].includes('Valid')) label.textContent = Math.round(val * 100);
+            else if (item[1].includes('Limit') || item[1] === 'pop' || item[1] === 'elite' || item[1] === 'stale' || item[1] === 'lapStart' || item[1] === 'lapMax') label.textContent = Math.round(val);
             else label.textContent = val.toFixed(2);
             if (item[0] === 'tmut') { var mutDisplay = document.getElementById('vtmut'); if (mutDisplay) mutDisplay.textContent = val.toFixed(2); }
         }
     });
 });
 
+document.getElementById('tstagconfirm').addEventListener('change', function () {
+    train.stagConfirm = this.checked;
+});
+
 // Tooltip Logic
 var PARAM_DESCS = {
-    pa: "Aceleración: Fuerza del motor. Valores altos permiten ganar velocidad rápidamente, ideal para circuitos con muchas frenadas y aceleraciones. Ojo con el derrape si superas el agarre disponible.",
-    pm: "Velocidad Máx: El límite físico del motor. En F1 se busca lo más alto posible para las rectas largas.",
-    ptt: "Tracción: 0=Trasera (clásico F1, sobrevira al acelerar), 1=Total (mejor tracción y estabilidad en salida de curva).",
-    pb: "Fuerza Frenado: Capacidad de detención. Un valor alto permite frenar más tarde (late braking), pero requiere buen ABS o tacto para no bloquear.",
-    pbb: "Bias Trasero: Distribución de frenado. >0.5 frena más atrás (ayuda a rotar el auto pero es inestable), <0.5 más adelante (más estable pero subvirador).",
-    pabs: "ABS: Sistema antibloqueo. Permite frenar a fondo sin perder la dirección, vital a 300 km/h.",
-    pd: "Drag: Resistencia al aire. Reduce la velocidad gradualmente. Autos aerodinámicos tienen valores cercanos a 1.0.",
-    pdf: "Downforce: Carga aerodinámica. Empuja el auto hacia el piso a alta velocidad, aumentando el agarre lateral drásticamente en curvas rápidas.",
-    pms: "Masa: El peso del vehículo. Mayor masa aumenta la inercia, haciendo que el auto sea más difícil de detener y girar (subviraje por inercia).",
-    pgr: "Agarre Lateral: Calidad de los neumáticos en curva. Es el límite antes de que el auto empiece a deslizar.",
-    po: "Oversteer: Sensibilidad de rotación. Determina qué tanto 'colea' el auto cuando pierde tracción.",
-    pst: "Steering Max: Ángulo de giro de las ruedas. Más ángulo permite tomar curvas más cerradas (como en horquillas).",
-    pco: "Compuesto: Blando (más agarre, más desgaste), Duro (menos agarre, eterno).",
-    pdg: "Degradación: Qué tan rápido se gasta el neumático con el uso intenso.",
-    ptg: "Adherencia Pista: Estado del asfalto. Modifica el agarre global (ej. pista mojada vs seca).",
-    psm: "Multiplicador Velocidad: Ajuste visual para el Dashboard. Úsalo para calibrar qué tan 'real' se siente la velocidad mostrada en KM/H.",
-    tpop: "Total: Cantidad de autos entrenados simultáneamente por generación.",
-    telite: "Elite copias: Cantidad de los mejores autos que pasan tal cual a la siguiente generación.",
-    tinject: "Inyección Aleatoria: Porcentaje de autos aleatorios nuevos insertados para mantener diversidad genética.",
-    tmut: "Base: Probabilidad de que los pesos neuronales cambien al clonar.",
-    tmutmin: "Mínima: Límite inferior de mutación cuando la red está aprendiendo con éxito.",
-    tmutmax: "Máxima: Límite superior usado en estancamiento para forzar la búsqueda de nuevas soluciones.",
-    tstale: "Gens estancado: Tolerancia de generaciones sin mejora antes de incrementar mutación.",
-    tftime: "Peso Tiempo/Dist: Prioriza tiempo de vuelta vs distancia completada en la fórmula de Fitness.",
-    tfpen: "Penalty Frame: Penalización de fitness por cada frame de vida, fomenta ir más rápido.",
-    tfbonus: "Bonus Vuelta: Recompensa masiva en fitness por terminar la vuelta, clave para aprender el circuito.",
-    tlapst: "Vueltas Start: Objetivo inicial de vueltas para el algoritmo genético.",
-    tlapmax: "Vueltas Max: Límite donde se detiene la evaluación progresiva del entrenamiento.",
-    tlapvalid: "Cobertura Mínima: Porcentaje del circuito que debe ser recorrido sin hacer atajos tramposos."
+    pvmax: "Velocidad Máxima: El límite de velocidad que el auto puede alcanzar en km/h. Afectado por la carga aerodinámica y la potencia disponible.",
+    paccel: "Aceleración (0-100): El tiempo en segundos que tarda el vehículo en alcanzar los 100 km/h. Un valor menor significa un motor más potente.",
+    pmaneuver: "Maniobrabilidad: Capacidad de giro y agarre lateral. Valores altos permiten curvas más cerradas, pero a alta velocidad el auto puede 'irse largo' si se supera el límite de fricción.",
+    'sel-dt': "Tracción (Drivetrain): FWD (Delantera), RWD (Trasera), 4WD (4x4), AWD (Total). Afecta la estabilidad y capacidad de salida en curvas.",
+    'sel-eng': "Posición del Motor: F (Frontal), M (Central), R (Trasero). Cambia el centro de gravedad y la inercia de rotación del vehículo.",
+    tstaglimit: "Límite de Estancamiento: Número de generaciones sin romper un récord tras las cuales se activará la recuperación automática."
 };
 
 var tt = document.getElementById('param-tooltip');
@@ -605,6 +752,32 @@ function updateLB() {
     var bestBL = allBL.length ? Math.min.apply(null, allBL) : Infinity;
     document.getElementById('sbl').textContent = fmtF(bestBL);
     document.getElementById('srec').textContent = fmtF(gbl);
+    
+    // Update Stagnation Counter in Main HUD
+    var stagBox = document.getElementById('stag-hud-box');
+    if (stagBox) {
+        stagBox.classList.remove('hidden'); // Always show it
+        var stagnation = 0, limit = 100, label = "Intento";
+        
+        if (gbl === Infinity) {
+            stagnation = gen - lastDistRecordGen;
+            limit = train.stagLimit || 100;
+            label = "Exploración";
+        } else {
+            stagnation = gen - lastRecordGen;
+            limit = train.stagLimit || 100;
+            label = "Récord";
+        }
+        
+        var sstag = document.getElementById('sstag');
+        sstag.parentElement.innerHTML = label + ' <span id="sstag" style="color: var(--color-warning); font-weight: 700;">' + stagnation + '/' + limit + '</span>';
+        
+        // Refresh reference to the newly created span if needed, but innerHTML is enough for now.
+        // Actually, just update textContent to avoid recreating the span every 10 frames.
+        var sstagNew = document.getElementById('sstag');
+        sstagNew.textContent = stagnation + '/' + limit;
+        sstagNew.style.color = stagnation > (limit * 0.85) ? '#ff5252' : (stagnation > (limit * 0.5) ? '#ffb74d' : 'var(--color-warning)');
+    }
 
     var cols = getCols();
     var sorted = cars.slice().sort(function (a, b) {
@@ -731,19 +904,19 @@ function drawCanvasHUD(ctx) {
     ctx.textAlign = 'left';
     
     var spd = leader.spd;
-    var ms = leader.phys ? leader.phys.ms : phys.ms;
-    var sm = leader.phys ? (leader.phys.sm || 10) : (phys.sm || 10);
+    var vmax_internal = (leader.phys ? leader.phys.vmax : phys.vmax) / (phys.sm || 10);
+    var sm = phys.sm || 10;
     var kmh = spd * sm;
     ctx.fillText('VELOCIDAD', 12, 22);
     ctx.font = 'bold 18px sans-serif';
-    ctx.fillStyle = '#00e676'; // var(--color-accent)
+    ctx.fillStyle = '#00e676'; 
     ctx.fillText(kmh.toFixed(0) + ' km/h', 95, 22);
     
     // Animated Speed Bar
     ctx.fillStyle = 'rgba(255,255,255,0.05)';
     ctx.fillRect(12, 30, 160, 8);
     
-    var spdPct = Math.min(1, spd/ms);
+    var spdPct = Math.min(1, spd / vmax_internal);
     var gradient = ctx.createLinearGradient(12, 0, 172, 0);
     gradient.addColorStop(0, '#2196f3'); // var(--color-info)
     gradient.addColorStop(1, '#00e676'); // var(--color-accent)
@@ -751,6 +924,17 @@ function drawCanvasHUD(ctx) {
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.fillRect(12, 30, 160 * spdPct, 8);
+
+    // BRAKE INDICATOR
+    var brkOut = leader.brkOut || 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(12, 42, 160, 4); // Brake bar background
+    if (brkOut > 0.05) {
+        ctx.fillStyle = '#ff5252';
+        ctx.fillRect(12, 42, 160 * brkOut, 4);
+        ctx.font = 'bold 8px sans-serif';
+        ctx.fillText('FRENO', 175, 46);
+    }
     
     // Stats Grid
     ctx.fillStyle = '#606070'; // var(--color-text-dim)
@@ -1031,13 +1215,13 @@ function updateCompareButton() {
     rbtn.style.opacity = active ? '1' : '0.5';
 }
 
-window.createProfileFromCar = function(car, isAuto = false) {
+window.createProfileFromCar = function(car, isAuto = false, customName = null) {
     var bLap = car.bestLap();
     var blText = bLap === Infinity ? 'Incompleto' : fmtF(bLap);
     
     var prof = {
         id: generateUUID(),
-        name: (isAuto ? '🏆 Record: ' : 'Perfil ') + 'Gen ' + gen + ' (' + blText + ')',
+        name: customName || ((isAuto ? '🏆 Record: ' : 'Perfil ') + 'Gen ' + gen + ' (' + blText + ')'),
         net: JSON.parse(JSON.stringify(car.net.w)),
         phys: JSON.parse(JSON.stringify(phys)),
         stats: {
@@ -1048,6 +1232,7 @@ window.createProfileFromCar = function(car, isAuto = false) {
         derivedFrom: fineTuneProfile ? fineTuneProfile.name : null
     };
     profiles.push(prof);
+    saveProfilesToLocal();
     renderProfiles();
 
     if (isAuto) {
@@ -1154,7 +1339,8 @@ function compareLoop() {
                 c.spd = 0; c.slip = 0; c.alive = true; c.finished = false;
                 c.fc = 0; c.prevIdx = startLine.idx; c.totalD = 0; c.stuck = 0;
                 c.laps = 0; c.lapStartFrame = 0; c.finishFrame = 0; c.lapTimes = [];
-                c.resetLapTracking(); c.crossCD = 0; c.tw = 1;
+                c.resetLapTracking(); c.crossCD = 0; c.tw = 1; c.totalSlip = 0;
+                c.fuel = c.phys.fuelLiters || 50;
             });
         }
     }
@@ -1233,10 +1419,10 @@ function renderRaceCompetitors() {
         
         // Physics Summary
         var physHtml = '<div class="phys-mini-tag">' +
-            '<span>V-MAX: ' + (p.phys.ms * (p.phys.sm||10)).toFixed(0) + ' km/h</span>' +
-            '<span>ACCEL: ' + p.phys.a.toFixed(1) + '</span>' +
-            '<span>MASA: ' + p.phys.ma.toFixed(1) + 'kg</span>' +
-            '<span>DRAG: ' + p.phys.dr.toFixed(3) + '</span>' +
+            '<span>V-MAX: ' + p.phys.vmax + ' km/h</span>' +
+            '<span>0-100: ' + p.phys.accel + 's</span>' +
+            '<span>MAN: ' + p.phys.maneuver + '%</span>' +
+            '<span>' + p.phys.drivetrain + ' (' + p.phys.engine + ')</span>' +
         '</div>';
         
         html += '<div class="race-card">' +
@@ -1378,5 +1564,123 @@ function updateTelemetryUI(sorted) {
 
 // Update compareLoop to handle fuel subtraction (done in ai.js upd already, but we check here for HUD updates if needed)
 
+// --- TUNING SYSTEM LOGIC ---
+var tuningLibrary = [];
+var currentAppliedTuningIds = new Set();
+window.currentAppliedTuning = [];
+
+function updateTuningUI() {
+    var libList = document.getElementById('tuning-items-library');
+    if (libList) {
+        libList.innerHTML = tuningLibrary.length ? tuningLibrary.map(function(t) {
+            return '<div class="tuning-lib-item">' +
+                '<div class="tuning-lib-item-info">' +
+                    '<h4>' + t.name + '</h4>' +
+                    '<p>ΔV: ' + (t.vmax >= 0 ? '+' : '') + t.vmax + ' | Δ0-100: ' + (t.accel >= 0 ? '+' : '') + t.accel + 's | ΔM: ' + (t.maneuver >= 0 ? '+' : '') + t.maneuver + '%</p>' +
+                '</div>' +
+                '<button class="no" onclick="removeTuningFromLibrary(\'' + t.id + '\')">✕</button>' +
+            '</div>';
+        }).join('') : '<p style="text-align:center; font-size:11px; opacity:0.5;">No hay piezas creadas.</p>';
+    }
+
+    var checklist = document.getElementById('applied-tuning-list');
+    if (checklist) {
+        checklist.innerHTML = tuningLibrary.map(function(t) {
+            var isChecked = currentAppliedTuningIds.has(t.id);
+            return '<label class="tuning-item-row">' +
+                '<input type="checkbox" data-id="' + t.id + '" ' + (isChecked ? 'checked' : '') + '> ' +
+                '<span>' + t.name + '</span>' +
+            '</label>';
+        }).join('');
+        
+        checklist.querySelectorAll('input').forEach(function(inp) {
+            inp.addEventListener('change', function() {
+                if (this.checked) currentAppliedTuningIds.add(this.dataset.id);
+                else currentAppliedTuningIds.delete(this.dataset.id);
+                syncTuningToCars();
+            });
+        });
+    }
+}
+
+function syncTuningToCars() {
+    window.currentAppliedTuning = tuningLibrary.filter(function(t) { return currentAppliedTuningIds.has(t.id); });
+    // In comparison mode, update cars immediately
+    if (isCompareMode && cars.length > 0) {
+        cars.forEach(function(c) { c.tuning = JSON.parse(JSON.stringify(window.currentAppliedTuning)); });
+    }
+}
+
+window.removeTuningFromLibrary = function(id) {
+    tuningLibrary = tuningLibrary.filter(function(t) { return t.id !== id; });
+    currentAppliedTuningIds.delete(id);
+    saveTuningToLocal();
+    updateTuningUI();
+    syncTuningToCars();
+};
+
+document.getElementById('btn-open-tuning-editor').addEventListener('click', function() {
+    document.getElementById('modal-tuning-editor').classList.remove('hidden');
+    updateTuningUI();
+});
+
+document.querySelectorAll('.close-modal-tune').forEach(function(b) {
+    b.addEventListener('click', function() {
+        document.getElementById('modal-tuning-editor').classList.add('hidden');
+    });
+});
+
+document.getElementById('btn-save-tune').addEventListener('click', function() {
+    var name = document.getElementById('tune-name').value;
+    if (!name) { alert('Ingresa un nombre para la pieza'); return; }
+    
+    var item = {
+        id: generateUUID(),
+        name: name,
+        vmax: parseFloat(document.getElementById('tune-vmax').value) || 0,
+        accel: parseFloat(document.getElementById('tune-accel').value) || 0,
+        maneuver: parseFloat(document.getElementById('tune-maneuver').value) || 0
+    };
+    
+    tuningLibrary.push(item);
+    document.getElementById('tune-name').value = '';
+    saveTuningToLocal();
+    updateTuningUI();
+});
+
+function saveTuningToLocal() {
+    localStorage.setItem('airacer_tuning_library', JSON.stringify(tuningLibrary));
+}
+
+function loadTuningFromLocal() {
+    var stored = localStorage.getItem('airacer_tuning_library');
+    if (stored) {
+        try {
+            tuningLibrary = JSON.parse(stored);
+            updateTuningUI();
+        } catch(e) { console.error("Error loading tuning library", e); }
+    }
+}
+
+function saveProfilesToLocal() {
+    // Only save top 10 profiles to avoid quota issues
+    var toSave = profiles.slice(0, 10);
+    localStorage.setItem('airacer_profiles', JSON.stringify(toSave));
+}
+
+function loadProfilesFromLocal() {
+    var stored = localStorage.getItem('airacer_profiles');
+    if (stored) {
+        try {
+            profiles = JSON.parse(stored);
+            renderProfiles();
+        } catch(e) { console.error("Error loading profiles", e); }
+    }
+}
+
+// Call loaders on Init
+loadTuningFromLocal();
+loadProfilesFromLocal();
+
 // Init
-resize(); buildHead(); renderProfiles(); render();
+resize(); buildHead(); renderProfiles(); updateTuningUI(); render();

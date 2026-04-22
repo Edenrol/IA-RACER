@@ -43,7 +43,16 @@
                         <label>Ancho de pista <span id="tw-v">50</span></label>
                         <input type="range" id="tw" min="25" max="90" value="50" step="1">
                     </div>
-                    <div class="info-banner">
+                    <div class="tool-group">
+                        <h3>Muros de Muerte (Manual)</h3>
+                        <div class="tb">
+                            <button id="btn-mode-track" class="ok active">Modo Pista</button>
+                            <button id="btn-mode-walls" class="no">Modo Muros</button>
+                            <button id="btn-new-wall" style="background:var(--color-bg-surface-elevated); border:1px solid var(--color-danger); color:var(--color-danger); font-size:10px;">+ Nuevo Muro</button>
+                            <button id="btn-clr-walls" class="no">Borrar Muros</button>
+                        </div>
+                    </div>
+                    <div class="info-banner" id="editor-hint">
                         Haz clic para agregar puntos.<br>Arrastra puntos para editar.<br>Doble clic para cerrar.
                     </div>
                     <button id="btn-load" class="ok btn-full">CARGAR PISTA</button>
@@ -52,7 +61,7 @@
                 <!-- Auto Dashboard Panel -->
                 <div class="panel" id="panel-auto">
                     <div class="auto-blueprint">
-                        <img src="car_technical_blueprint_1776796024650.png" alt="Blueprint" style="width:100%; height:120px; object-fit:cover; border-radius:12px; margin-bottom:16px; opacity:0.6; border:1px solid var(--color-border);">
+                        <img src="blueprint_pro.png" alt="Blueprint" style="width:100%; height:120px; object-fit:cover; border-radius:12px; margin-bottom:16px; opacity:0.8; border:1px solid var(--color-border);">
                         <div class="blueprint-overlay">
                             <h2 id="auto-name">PROTOTYPE-X1</h2>
                             <p id="auto-class">Performance Class: --</p>
@@ -69,12 +78,12 @@
                             <div class="stat-value"><span id="dash-accel">0.0</span> <small>s</small></div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-label">POTENCIA</div>
-                            <div class="stat-value"><span id="dash-power">0</span> <small>HP</small></div>
+                            <div class="stat-label">MANIOBRA</div>
+                            <div class="stat-value"><span id="dash-maneuver">0</span> <small>%</small></div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-label">PESO</div>
-                            <div class="stat-value"><span id="dash-weight">0</span> <small>kg</small></div>
+                            <div class="stat-label">TRACCIÓN</div>
+                            <div class="stat-value" style="font-size: 0.9rem;" id="dash-traction">--</div>
                         </div>
                     </div>
 
@@ -91,35 +100,48 @@
                     </div>
 
                     <div class="tool-group">
-                        <h3>Unidad de Potencia</h3>
-                        <div class="control-row"><label>Aceleración <button class="info-btn" data-info="pa">i</button> <span id="vpa">3.5</span></label><input type="range" id="pa" min="0.5" max="8" step="0.1" value="3.5"></div>
-                        <div class="control-row"><label>Velicidad Máx <button class="info-btn" data-info="pm">i</button> <span id="vpm">5.5</span></label><input type="range" id="pm" min="2" max="12" step="0.2" value="5.5"></div>
-                        <div class="control-row"><label>Tracción (RWD-AWD) <button class="info-btn" data-info="ptt">i</button> <span id="vptt">0.5</span></label><input type="range" id="ptt" min="0" max="1" step="0.1" value="0.5"></div>
-                        <div class="control-row"><label>Multiplicador Velocidad <button class="info-btn" data-info="psm">i</button> <span id="vpsm">10</span></label><input type="range" id="psm" min="5" max="50" step="1" value="10"></div>
-                        <div class="control-row"><label>Drag <button class="info-btn" data-info="pd">i</button> <span id="vpd">0.970</span></label><input type="range" id="pd" min="0.90" max="0.999" step="0.001" value="0.97"></div>
+                        <h3>Configuración Base</h3>
+                        <div class="control-row">
+                            <label>V-MAX <span id="vvmax">220</span> km/h</label>
+                            <input type="range" id="pvmax" min="40" max="400" step="5" value="220">
+                        </div>
+                        <div class="control-row">
+                            <label>0-100 <span id="vaccel">6.0</span> s</label>
+                            <input type="range" id="paccel" min="0.5" max="15" step="0.1" value="6.0">
+                        </div>
+                        <div class="control-row">
+                            <label>Maniobrabilidad <span id="vmaneuver">50</span>%</label>
+                            <input type="range" id="pmaneuver" min="0" max="100" step="1" value="50">
+                        </div>
                     </div>
 
                     <div class="tool-group">
-                        <h3>Aero & Dinámica</h3>
-                        <div class="control-row"><label>Downforce <button class="info-btn" data-info="pdf">i</button> <span id="vpdf">0.5</span></label><input type="range" id="pdf" min="0" max="3" step="0.1" value="0.5"></div>
-                        <div class="control-row"><label>Masa (t) <button class="info-btn" data-info="pms">i</button> <span id="vpms">1.2</span></label><input type="range" id="pms" min="0.5" max="3" step="0.1" value="1.2"></div>
-                        <div class="control-row"><label>Agarre Lateral <button class="info-btn" data-info="pgr">i</button> <span id="vpgr">0.08</span></label><input type="range" id="pgr" min="0.01" max="0.2" step="0.005" value="0.08"></div>
+                        <h3>Tracción (Drivetrain)</h3>
+                        <div class="tb-group">
+                            <button class="sel-dt active" data-dt="FWD">FWD</button>
+                            <button class="sel-dt" data-dt="RWD">RWD</button>
+                            <button class="sel-dt" data-dt="4WD">4WD</button>
+                            <button class="sel-dt" data-dt="AWD">AWD</button>
+                        </div>
                     </div>
 
                     <div class="tool-group">
-                        <h3>Control & Frenado</h3>
-                        <div class="control-row"><label>Fuerza Frenado <button class="info-btn" data-info="pb">i</button> <span id="vpb">5.0</span></label><input type="range" id="pb" min="1" max="12" step="0.1" value="5"></div>
-                        <div class="control-row"><label>Bias Trasero <button class="info-btn" data-info="pbb">i</button> <span id="vpbb">0.60</span></label><input type="range" id="pbb" min="0.3" max="0.7" step="0.05" value="0.6"></div>
-                        <div class="control-row"><label>ABS <button class="info-btn" data-info="pabs">i</button> <span id="vpabs">off</span></label><input type="range" id="pabs" min="0" max="1" step="1" value="0"></div>
-                        <div class="control-row"><label>Oversteer <button class="info-btn" data-info="po">i</button> <span id="vpo">0.20</span></label><input type="range" id="po" min="0" max="1" step="0.05" value="0.2"></div>
-                        <div class="control-row"><label>Steering Max <button class="info-btn" data-info="pst">i</button> <span id="vpst">0.07</span></label><input type="range" id="pst" min="0.02" max="0.15" step="0.005" value="0.07"></div>
+                        <h3>Posición del Motor</h3>
+                        <div class="tb-group">
+                            <button class="sel-eng" data-eng="F">FRONTE (F)</button>
+                            <button class="sel-eng active" data-eng="M">CENTRAL (M)</button>
+                            <button class="sel-eng" data-eng="R">TRASERO (R)</button>
+                        </div>
                     </div>
 
                     <div class="tool-group">
-                        <h3>Neumáticos</h3>
-                        <div class="control-row"><label>Compuesto <button class="info-btn" data-info="pco">i</button> <span id="vpco">medio</span></label><input type="range" id="pco" min="0" max="1" step="0.1" value="0.5"></div>
-                        <div class="control-row"><label>Degradación <button class="info-btn" data-info="pdg">i</button> <span id="vpdg">0.000</span></label><input type="range" id="pdg" min="0" max="0.001" step="0.00005" value="0"></div>
-                        <div class="control-row"><label>Adherencia Pista <button class="info-btn" data-info="ptg">i</button> <span id="vptg">1.00</span></label><input type="range" id="ptg" min="0.3" max="1" step="0.05" value="1"></div>
+                        <h3>Sistema de Tuna (Tuning)</h3>
+                        <div class="tuning-container">
+                            <div id="applied-tuning-list" class="tuning-checklist">
+                                <!-- Applied tuning items here -->
+                            </div>
+                            <button id="btn-open-tuning-editor" class="btn-full" style="margin-top:10px; font-size: 10px;">🛠 ADMINISTRAR PIEZAS</button>
+                        </div>
                     </div>
                 </div>
 
@@ -145,6 +167,10 @@
                         <div class="control-row"><label>Peso Tiempo/Dist <button class="info-btn" data-info="tftime">i</button> <span id="vtftime">0.70</span></label><input type="range" id="tftime" min="0" max="1" step="0.05" value="0.7"></div>
                         <div class="control-row"><label>Penalty Frame <button class="info-btn" data-info="tfpen">i</button> <span id="vtfpen">0.50</span></label><input type="range" id="tfpen" min="0" max="2" step="0.05" value="0.5"></div>
                         <div class="control-row"><label>Bonus Vuelta <button class="info-btn" data-info="tfbonus">i</button> <span id="vtfbonus">8000</span></label><input type="range" id="tfbonus" min="1000" max="20000" step="500" value="8000"></div>
+                        <div class="control-row" style="border-top:1px solid rgba(255,255,255,0.05); padding-top:10px; margin-top:10px;">
+                            <label style="color:var(--color-warning)">⚠️ Margen Fuera de Pista <span id="vtsfty">2.5</span>x</label>
+                            <input type="range" id="tsfty" min="0" max="6.0" step="0.1" value="2.5">
+                        </div>
                     </div>
 
                     <div class="tool-group">
@@ -152,6 +178,19 @@
                         <div class="control-row"><label>Vueltas Start <button class="info-btn" data-info="tlapst">i</button> <span id="vtlapst">1</span></label><input type="range" id="tlapst" min="1" max="10" step="1" value="1"></div>
                         <div class="control-row"><label>Vueltas Max <button class="info-btn" data-info="tlapmax">i</button> <span id="vtlapmax">8</span></label><input type="range" id="tlapmax" min="1" max="100" step="1" value="8"></div>
                         <div class="control-row"><label>Cobertura Mínima <button class="info-btn" data-info="tlapvalid">i</button> <span id="vtlapvalid">85</span>%</label><input type="range" id="tlapvalid" min="0.5" max="1" step="0.05" value="0.85"></div>
+                    </div>
+
+                    <div class="tool-group">
+                        <h3>Estancamiento</h3>
+                        <div class="control-row">
+                            <label>Límite de Gens <button class="info-btn" data-info="tstaglimit">i</button> <span id="vtstaglimit">100</span></label>
+                            <input type="range" id="tstaglimit" min="20" max="500" step="10" value="100">
+                        </div>
+                        <div class="control-row" style="margin-top:8px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="tstagconfirm" checked> Confirmar Acción (Popup)
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -241,6 +280,10 @@
                 </div>
                 <div class="hud-item">
                     <div>Vivos <span id="sa" style="color: var(--color-info); font-weight: 700;">0/0</span></div>
+                    <div id="stag-hud-box" class="hidden" style="display:flex; align-items:center; gap:8px;">
+                        <div style="width: 1px; background: var(--color-border); height: 12px; margin: 0 4px;"></div>
+                        <div>Intento <span id="sstag" style="color: var(--color-warning); font-weight: 700;">0/100</span></div>
+                    </div>
                 </div>
                 <div class="hud-item">
                     <div>Record <span id="srec" style="color: var(--color-warning); font-weight: 700;">--</span></div>
@@ -275,6 +318,32 @@
             </div>
         </main>
     </div>
+
+            <!-- Tuning Editor Modal -->
+            <div id="modal-tuning-editor" class="modal-overlay hidden">
+                <div class="modal-content tuning-modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h2>🛠 ADMINISTRADOR DE PIEZAS</h2>
+                        <button class="close-modal-tune">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="tuning-items-library" class="tuning-lib-list">
+                            <!-- List of all created tuning items -->
+                        </div>
+                        <hr style="border:none; border-top:1px solid var(--color-border); margin:16px 0;">
+                        <h3>CREAR NUEVA PIEZA</h3>
+                        <div class="tuning-form">
+                            <input type="text" id="tune-name" placeholder="Nombre (ej: Turbo Etapa 1)" style="width:100%; padding:10px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:8px; color:#fff; margin-bottom:12px;">
+                            <div class="tune-params-grid" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+                                <div class="tuning-input-group"><label style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ V-MAX</label><input type="number" id="tune-vmax" value="10" style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:#fff;"></div>
+                                <div class="tuning-input-group"><label style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ 0-100</label><input type="number" id="tune-accel" value="-0.5" step="0.1" style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:var(--color-success);"></div>
+                                <div class="tuning-input-group"><label style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ MANIOBRA</label><input type="number" id="tune-maneuver" value="5" style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:var(--color-accent);"></div>
+                            </div>
+                            <button id="btn-save-tune" class="ok btn-full" style="margin-top:16px;">GUARDAR PIEZA</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Race Setup Modal -->
             <div id="modal-race-setup" class="modal-overlay hidden">
