@@ -1,45 +1,92 @@
 // AI & Genetic Algorithm Logic - IA RACER PRO
+// REWRITE v3 — fixes aplicados:
+// 1. Red neuronal 20→32→16→3 (2 capas ocultas)
+// 2. Throttle/freno con rango completo (out+1)/2
+// 3. Throttle y freno mutuamente excluyentes (1 output para accel/brake)
+// 4. Bug staleCount doble reset corregido
+// 5. Stuck limits reducidos (600→180, 1500→600)
+// 6. Look-ahead con fracciones relativas al circuito
+// 7. Todos los inputs normalizados a [-1,1]
+// 8. Input de aceleración (delta velocidad) agregado
+// 9. Input 20 (lap progress redundante) eliminado
+// 10. fineTuneActive flag separado del numero de gen
+// 11. Penalización por dirección inversa en fitness
+// 12. lapCoverageOk duplicado removido
 
-// Colors for the cars
 var CCOLS = ['#4fc3f7', '#ffb74d', '#f48fb1', '#ce93d8', '#80cbc4', '#fff176', '#ff8a65', '#a5d6a7', '#90caf9', '#ef9a9a', '#b39ddb', '#80deea', '#ffe082', '#c5e1a5', '#ffcc80', '#b0bec5', '#f8bbd0', '#d1c4e9', '#b2dfdb', '#ffe0b2', '#fff9c4', '#e1bee7', '#bbdefb', '#dcedc8', '#81c784'];
 var SANGS = [-75, -45, -20, 0, 20, 45, 75].map(function (a) { return a * Math.PI / 180; });
 var SL = 200;
 
 // Global Simulation State
 var gen = 0, gbl = Infinity, cars = [], top3ids = new Set();
-var bestDistFound = 0; // Track the all-time furthest distance reached
-var bestDistNet = null; // Store the weights (brain) of the best explorer
-var bestLapNet = null; // Store the weights of the all-time best lap
-var lastRecordGen = 0; // The generation when the lap record was last broken
-var lastDistRecordGen = 0; // The generation when the distance record was last broken
+var bestDistFound = 0;
+var bestDistNet = null;
+var bestLapNet = null;
+var lastRecordGen = 0;
+var lastDistRecordGen = 0;
 var currentLaps = 1, currentMut = 0.15, prevBestFitness = -Infinity, staleCount = 0;
 var CL = [], OUT = [], INN = [], loaded = false, startLine = null, TW = 50;
-var phys = { 
-    vmax: 220, // km/h
-    accel: 6.0, // 0-100 in s
-    maneuver: 50, // 0-100%
-    drivetrain: 'RWD', // FWD, RWD, 4WD, AWD
-    engine: 'M', // F (Front), M (Mid), R (Rear)
-    sm: 10 // Visualization scale
+var clDist = [], clTotalLen = 0;
+var phys = {
+    vmax: 220,
+    accel: 6.0,
+    maneuver: 50,
+    drivetrain: 'RWD',
+    engine: 'M',
+    sm: 10
 };
-var train = { pop: 28, elite: 3, inject: 0.2, mutBase: 0.15, mutMin: 0.05, mutMax: 0.45, stale: 3, ftime: 0.7, fpen: 0.5, fbonus: 8000, lapStart: 1, lapMax: 8, lapThresh: 0.5, lapValid: 0.85, safety: 2.5, stagLimit: 100, stagConfirm: true };
+var train = {
+    pop: 28, elite: 3, inject: 0.2,
+    mutBase: 0.15, mutMin: 0.05, mutMax: 0.45, stale: 3,
+    ftime: 0.7, fpen: 0.5, fbonus: 8000,
+    lapStart: 1, lapMax: 8, lapThresh: 0.5, lapValid: 0.85,
+    safety: 2.5, stagLimit: 50, stagConfirm: true
+};
 var isEditing = true, sctx = null, actF = new Set(['speed', 'laps', 'bl', 'fit']);
-var fineTuneProfile = null; // Profile loaded for fine-tuning
-var isCompareMode = false; // Flag for comparison mode
-var genHistory = []; // Track metrics for charting
-var finishTimer = -1; // New: countdown after first finisher
-var isRaceMode = false; // New: Strategy mode
-var useFuel = true; // New: Toggle fuel system
+var fineTuneProfile = null;
+var fineTuneActive = false; // FIX #10: flag separado de gen===1
+var isCompareMode = false;
 
-// Helper functions 
+// ==================== CURRICULUM LEARNING ====================
+var curriculumMode = false;
+var curriculumSector = 1;   // goal zone (1-23), cars must reach this zone
+var curriculumThresh = 0.6; // fraction of cars that must hit goal to advance sector
+var bestCurriculumNet = null; // best net that ever reached the curriculum goal
+
+// ==================== DISTRIBUTED SPAWN ====================
+var distributedSpawnMode = false;
+var curriculumIsolated = false; // false = acumulativo (spawn zona 0), true = aislado (spawn inicio del sector)
+var genHistory = [];
+var finishTimer = -1;
+var isRaceMode = false;
+var useFuel = true;
+
+// INPUT COUNT: 7 sensores + spd + slip + 3 specs fisica + dt + eng + 3 lookahead + relHead + latPos + accelDelta + sin/cos checkpointDir = 22
+var NET_INPUT_SIZE = 22;
+
+// Misma lógica que zoneClIndex en script.js pero disponible en ai.js
+function zoneClIndexAI(z, ZONES) {
+    if (clTotalLen <= 0 || clDist.length !== CL.length) {
+        return Math.round((z / ZONES) * CL.length) % CL.length;
+    }
+    var target = (z / ZONES) * clTotalLen;
+    var lo = 0, hi = CL.length - 1;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (clDist[mid] < target) lo = mid + 1; else hi = mid; }
+    return lo % CL.length;
+}
+
+// ==================== HELPERS ====================
 function relu(x) { return x > 0 ? x : 0; }
+
 function segi(ax, ay, bx, by, cx, cy, dx, dy) {
     var d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
     if (Math.abs(d) < 1e-10) return null;
-    var t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+    var t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d;
+    var u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
     if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return { t: t, x: ax + t * (bx - ax), y: ay + t * (by - ay) };
     return null;
 }
+
 function raycast(ox, oy, ang) {
     var ex = ox + Math.cos(ang) * SL, ey = oy + Math.sin(ang) * SL, best = SL, bx = ex, by = ey;
     [OUT, INN].forEach(function (poly) {
@@ -52,6 +99,7 @@ function raycast(ox, oy, ang) {
     });
     return { dist: best, ex: bx, ey: by };
 }
+
 function nearCL(px, py) {
     var md = 1e18, idx = 0;
     for (var i = 0; i < CL.length; i++) {
@@ -60,246 +108,361 @@ function nearCL(px, py) {
     }
     return idx;
 }
+
 function checkCross(x, y, px, py) {
     if (!startLine) return false;
     return segi(x, y, px, py, startLine.ax, startLine.ay, startLine.bx, startLine.by) !== null;
 }
 
-// Neural Network Class
+// ==================== NEURAL NETWORK ====================
+// FIX #1: Arquitectura 20→32→16→3 (2 capas ocultas)
 function Net(w) { this.w = w || this.rnd(); }
+
 Net.prototype.rnd = function () {
-    var H = 24, w = { l1: [], b1: [], l2: [], b2: [] };
-    var inputSize = 20; 
-    for (var i = 0; i < H; i++) { 
-        w.l1.push(Array.from({ length: inputSize }, function () { return (Math.random() - 0.5) * 2; })); 
-        w.b1.push((Math.random() - 0.5) * 0.5); 
+    var H1 = 32, H2 = 16;
+    var w = { l1: [], b1: [], l2: [], b2: [], l3: [], b3: [] };
+
+    // Capa 1: NET_INPUT_SIZE → H1
+    for (var i = 0; i < H1; i++) {
+        w.l1.push(Array.from({ length: NET_INPUT_SIZE }, function () { return (Math.random() - 0.5) * 2; }));
+        w.b1.push((Math.random() - 0.5) * 0.5);
     }
-    for (var i = 0; i < 3; i++) { 
-        var row = Array.from({ length: H }, function () { return (Math.random() - 0.5) * 2; });
-        // Bias the first output (Throttle) to be more likely positive in Gen 0
-        if (i === 0) row = row.map(function(v) { return v + 0.2; });
-        w.l2.push(row); 
-        w.b2.push(i === 0 ? 0.1 : (Math.random() - 0.5) * 0.5); 
+    // Capa 2: H1 → H2
+    for (var i = 0; i < H2; i++) {
+        w.l2.push(Array.from({ length: H1 }, function () { return (Math.random() - 0.5) * 2; }));
+        w.b2.push((Math.random() - 0.5) * 0.5);
+    }
+    // Salida: H2 → 3 (accel/brake combinado, steer, aux)
+    // FIX #3: output 0 = accel/brake combinado (positivo=acelerar, negativo=frenar)
+    // Bias throttle positivo para las primeras generaciones
+    for (var i = 0; i < 3; i++) {
+        var row = Array.from({ length: H2 }, function () { return (Math.random() - 0.5) * 2; });
+        if (i === 0) row = row.map(function (v) { return v + 0.3; }); // bias throttle
+        w.l3.push(row);
+        w.b3.push(i === 0 ? 0.2 : (Math.random() - 0.5) * 0.5);
     }
     return w;
 };
+
 Net.prototype.fwd = function (inp) {
     var w = this.w;
-    // Iterate over row.length instead of inp.length to handle mismatches gracefully
-    var h = w.l1.map(function (row, i) { 
-        var s = w.b1[i]; 
+    // Capa 1
+    var h1 = w.l1.map(function (row, i) {
+        var s = w.b1[i];
         var len = Math.min(row.length, inp.length);
-        for (var j = 0; j < len; j++) s += row[j] * inp[j]; 
-        return relu(s); 
+        for (var j = 0; j < len; j++) s += row[j] * inp[j];
+        return relu(s);
     });
-    return w.l2.map(function (row, i) { 
-        var s = w.b2[i]; 
-        for (var j = 0; j < h.length; j++) s += row[j] * h[j]; 
-        return Math.tanh(s); 
+    // Capa 2
+    var h2 = w.l2.map(function (row, i) {
+        var s = w.b2[i];
+        for (var j = 0; j < h1.length; j++) s += row[j] * h1[j];
+        return relu(s);
+    });
+    // Salida
+    return w.l3.map(function (row, i) {
+        var s = w.b3[i];
+        for (var j = 0; j < h2.length; j++) s += row[j] * h2[j];
+        return Math.tanh(s);
     });
 };
+
 Net.prototype.clone = function () { return new Net(JSON.parse(JSON.stringify(this.w))); };
+
 Net.prototype.mut = function (r) {
     var nw = JSON.parse(JSON.stringify(this.w));
     function m(a) { return a.map(function (v) { return Math.random() < r ? v + (Math.random() - 0.5) * 0.6 : v; }); }
-    nw.l1 = nw.l1.map(function (x) { return m(x); }); nw.b1 = m(nw.b1); nw.l2 = nw.l2.map(function (x) { return m(x); }); nw.b2 = m(nw.b2);
+    nw.l1 = nw.l1.map(function (x) { return m(x); }); nw.b1 = m(nw.b1);
+    nw.l2 = nw.l2.map(function (x) { return m(x); }); nw.b2 = m(nw.b2);
+    nw.l3 = nw.l3.map(function (x) { return m(x); }); nw.b3 = m(nw.b3);
     return new Net(nw);
 };
 
-// Car Class
+// Uniform crossover: cada peso se toma aleatoriamente de uno u otro padre
+Net.prototype.crossover = function (other) {
+    var a = this.w, b = other.w;
+    function cx(va, vb) { return va.map(function (v, i) { return Math.random() < 0.5 ? v : vb[i]; }); }
+    function cxR(ra, rb) { return ra.map(function (row, i) { return cx(row, rb[i]); }); }
+    return new Net({ l1: cxR(a.l1, b.l1), b1: cx(a.b1, b.b1), l2: cxR(a.l2, b.l2), b2: cx(a.b2, b.b2), l3: cxR(a.l3, b.l3), b3: cx(a.b3, b.b3) });
+};
+
+// ==================== CAR CLASS ====================
 function Car(net, id, col, customPhys, profileName, tuning) {
-    this.id = id; this.col = col; this.net = net || new Net();
+    this.id = id;
+    this.col = col;
+    this.net = net || new Net();
     this.phys = customPhys ? JSON.parse(JSON.stringify(customPhys)) : JSON.parse(JSON.stringify(phys));
     this.profileName = profileName || null;
-    this.tuning = tuning || []; // Array of tuning item objects: { id, name, vmax, accel, maneuver }
-    
-    this.x = startLine ? startLine.x : 0; this.y = startLine ? startLine.y : 0; this.ang = startLine ? startLine.ang : 0;
-    this.spd = 0; this.slip = 0; this.tw = 1;
-    this.alive = true; this.finished = false;
-    this.prevIdx = startLine ? startLine.idx : 0; this.totalD = 0; this.stuck = 0;
-    this.laps = 0; this.lapTimes = []; this.lapStartFrame = 0; this.fc = 0; this.finishFrame = 0;
-    this.lastZoneFrame = 0; 
-    this.prevX = this.x; this.prevY = this.y; this.crossCD = 0;
-    this.sens = []; this.thrOut = 0; this.brkOut = 0; this.msens = 1; this._fitness = 0;
+    this.tuning = tuning || [];
+
+    this.x = startLine ? startLine.x : 0;
+    this.y = startLine ? startLine.y : 0;
+    this.ang = startLine ? startLine.ang : 0;
+    this.spd = 0;
+    this.prevSpd = 0; // FIX #8: para calcular aceleracion
+    this.slip = 0;
+    this.tw = 1;
+    this.alive = true;
+    this.finished = false;
+    this.prevIdx = startLine ? startLine.idx : 0;
+    this.totalD = 0;
+    this.stuck = 0;
+    this.laps = 0;
+    this.lapTimes = [];
+    this.lapStartFrame = 0;
+    this.fc = 0;
+    this.finishFrame = 0;
+    this.lastZoneFrame = 0;
+    this.prevX = this.x;
+    this.prevY = this.y;
+    this.crossCD = 0;
+    this.sens = [];
+    this.thrOut = 0;
+    this.brkOut = 0;
+    this.msens = 1;
+    this._fitness = 0;
     this.ZONES = 24;
     this.zonesHit = new Array(this.ZONES).fill(false);
-    
-    this.tw = 1.0; 
-    this.totalSlip = 0; 
+    this.totalSlip = 0;
+    this.reverseFrames = 0;
+    this.curriculumGoalHit = false;
+    this.spawnZone = 0;
     this.fuel = customPhys ? (customPhys.fuelLiters || 100) : 100;
     this.compound = customPhys ? (customPhys.compound || 'M') : 'M';
 }
-Car.prototype.lapCoverageOk = function () { 
-    return this.lapProgress() >= (train.lapValid || 0.85); 
+
+Car.prototype.bestLap = function () {
+    return this.lapTimes.length ? Math.min.apply(null, this.lapTimes) : Infinity;
 };
-Car.prototype.bestLap = function () { return this.lapTimes.length ? Math.min.apply(null, this.lapTimes) : Infinity; };
+
+// FIX #11: penalización por reversa en fitness
 Car.prototype.calcFitness = function () {
+    if (curriculumMode) {
+        // Fitness cuadrático: zonas más cercanas al goal valen exponencialmente más
+        // Esto crea un gradiente fuerte que "tira" a los autos hacia el objetivo
+        var goal = Math.min(curriculumSector, this.ZONES - 1);
+        var proximityScore = 0;
+        for (var z = 0; z <= goal; z++) {
+            if (this.zonesHit[z]) {
+                var w = Math.pow((z + 1) / (goal + 1), 2); // 0..1 cuadrático
+                proximityScore += w * 4000;
+            }
+        }
+        // Bonus enorme por llegar al goal — siempre domina sobre proximityScore
+        var goalBonus = this.curriculumGoalHit ? 40000 : 0;
+        var timePenalty = this.fc * 0.04;
+        var reversePenalty = this.reverseFrames * 5;
+        return proximityScore + goalBonus - timePenalty - reversePenalty;
+    }
     var lapBonus = this.laps * train.fbonus;
     var timePenalty = this.fc * train.fpen;
     var distBonus = this.totalD * (1 - train.ftime);
-    var timeBonus = this.finished ? (train.fbonus * currentLaps * 2 - this.finishFrame * train.ftime) : 0;
-    
-    // Stability Bonus/Penalty: Reward cars that drive with less unnecessary sliding
-    var stabilityFactor = (this.totalSlip / (this.fc || 1)) * 50; 
-    
-    return lapBonus + distBonus + timeBonus - timePenalty - stabilityFactor;
+    // Bonus inversamente proporcional al tiempo: spread enorme entre rápidos y lentos
+    // 1000fr→8000pts, 2000fr→4000pts, 4000fr→2000pts — presión de selección agresiva
+    var timeBonus = this.finished
+        ? (8000000 / (this.finishFrame + 1)) + train.fbonus * currentLaps
+        : 0;
+    // Carros que terminan: slip admisible (líneas de carrera agresivas son más rápidas)
+    var stabilityFactor = (this.totalSlip / (this.fc || 1)) * (this.finished ? 5 : 50);
+    var reversePenalty = this.reverseFrames * 3;
+    return lapBonus + distBonus + timeBonus - timePenalty - stabilityFactor - reversePenalty;
 };
+
+// FIX #12: solo una definicion de lapCoverageOk
 Car.prototype.lapCoverageOk = function () {
-    var hit = 0; for (var i = 0; i < this.ZONES; i++) if (this.zonesHit[i]) hit++;
+    var hit = 0;
+    for (var i = 0; i < this.ZONES; i++) if (this.zonesHit[i]) hit++;
     return (hit / this.ZONES) >= train.lapValid;
 };
-Car.prototype.resetLapTracking = function () { this.zonesHit = new Array(this.ZONES).fill(false); };
+
+Car.prototype.resetLapTracking = function () {
+    this.zonesHit = new Array(this.ZONES).fill(false);
+};
+
+Car.prototype.lapProgress = function () {
+    var hit = 0;
+    for (var i = 0; i < this.ZONES; i++) if (this.zonesHit[i]) hit++;
+    return hit / this.ZONES;
+};
+
 Car.prototype.upd = function () {
     if (!this.alive) return;
     this.fc++;
     var self = this;
+
     var sens = SANGS.map(function (a) { return raycast(self.x, self.y, self.ang + a); });
     var minW = sens.reduce(function (a, b) { return a.dist < b.dist ? a : b; }).dist;
-    
-    // Strict collision check with 0.5s margin to prevent instant death on spawn jitter
+
     if (this.fc > 30 && minW < 4.0) { this.alive = false; this._fitness = this.calcFitness(); return; }
-    
-    this.sens = sens; this.msens = minW / SL;
+
+    this.sens = sens;
+    this.msens = minW / SL;
 
     var p = this.phys;
-    
-    // Apply Tuning effects
+
+    // Tuning
     var tune_vmax = 0, tune_accel = 0, tune_maneuver = 0;
-    this.tuning.forEach(function(t) {
+    this.tuning.forEach(function (t) {
         tune_vmax += (t.vmax || 0);
         tune_accel += (t.accel || 0);
         tune_maneuver += (t.maneuver || 0);
     });
 
-    // Effective Stats
     var eVmax_kmh = p.vmax + tune_vmax;
     var eAccel_0_100 = Math.max(0.1, p.accel + tune_accel);
     var eManeuver = Math.max(0, Math.min(100, p.maneuver + tune_maneuver));
-
-    // Internal Simulation Conversion
     var internalVmax = eVmax_kmh / p.sm;
-    var internalAccelForce = (100 / p.sm) / (eAccel_0_100 * 0.96); // 0.96 = 60fps * 0.016 step
-    
-    var inp = sens.map(function (s) { return s.dist / SL; });
-    inp.push(this.spd / internalVmax);
-    inp.push(this.slip / 30);
-    
-    // --- Context Awareness Inputs (Specs) ---
-    inp.push(eVmax_kmh / 400); // UI max 400
-    inp.push(eAccel_0_100 / 15); // UI max 15
-    inp.push(eManeuver / 100); // UI max 100
-    
-    var dtVal = 0; // FWD
+    var internalAccelForce = (100 / p.sm) / (eAccel_0_100 * 0.96);
+
+    // ==================== INPUTS ====================
+    // FIX #7: todos normalizados a [-1, 1]
+
+    var inp = [];
+
+    // 0-6: sensores (ya estan en [0,1], convertir a [-1,1] multiplicando por 2 - 1)
+    sens.forEach(function (s) { inp.push(s.dist / SL * 2 - 1); });
+
+    // 7: velocidad normalizada [-1,1]
+    inp.push((this.spd / internalVmax) * 2 - 1);
+
+    // 8: slip normalizado
+    inp.push(this.slip / 40);
+
+    // 9-11: specs de fisica normalizados
+    inp.push(eVmax_kmh / 400 * 2 - 1);       // vmax: 0-400 → -1 a 1
+    inp.push(eAccel_0_100 / 15 * 2 - 1);      // accel: 0-15 → -1 a 1
+    inp.push(eManeuver / 100 * 2 - 1);         // maneuver: 0-100 → -1 a 1
+
+    // 12: drivetrain como valor continuo
+    var dtVal = -1; // FWD
     if (p.drivetrain === 'RWD') dtVal = 1;
-    else if (p.drivetrain === '4WD') dtVal = 0.33;
-    else if (p.drivetrain === 'AWD') dtVal = 0.66;
+    else if (p.drivetrain === 'AWD') dtVal = 0.33;
+    else if (p.drivetrain === '4WD') dtVal = -0.33;
     inp.push(dtVal);
-    
-    var engVal = 0.5; // M
-    if (p.engine === 'F') engVal = 0;
+
+    // 13: engine position
+    var engVal = 0; // M
+    if (p.engine === 'F') engVal = -1;
     else if (p.engine === 'R') engVal = 1;
     inp.push(engVal);
 
-    // --- Look-ahead Awareness (Track knowledge) ---
+    // 14-16: look-ahead con fracciones relativas (FIX #6)
     var n = CL.length;
     if (n > 0) {
-        [15, 40, 80].forEach(function(offset) {
+        var fracs = [0.04, 0.12, 0.25]; // 4%, 12%, 25% del circuito
+        fracs.forEach(function (frac) {
+            var offset = Math.max(1, Math.floor(n * frac));
             var tIdx = (self.prevIdx + offset) % n;
             var target = CL[tIdx];
             var angToT = Math.atan2(target[1] - self.y, target[0] - self.x);
             var diff = angToT - self.ang;
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
-            inp.push(diff / Math.PI); 
+            inp.push(diff / Math.PI); // ya en [-1,1]
         });
 
-        // --- NEW: Lane & Orientation Awareness ---
+        // 17: heading relativo al track
         var curP = CL[self.prevIdx], nextP = CL[(self.prevIdx + 1) % n];
         var trackAng = Math.atan2(nextP[1] - curP[1], nextP[0] - curP[0]);
-        
-        // 18. Relative Heading (Am I aligned with the track?)
         var relHead = self.ang - trackAng;
         while (relHead > Math.PI) relHead -= Math.PI * 2;
         while (relHead < -Math.PI) relHead += Math.PI * 2;
-        inp.push(relHead / Math.PI);
+        inp.push(relHead / Math.PI); // [-1,1]
 
-        // 19. Lateral Position (Where am I in the lane? -1 to 1)
+        // 18: posicion lateral normalizada a [-1,1] (FIX #7: clamp a -1,1)
         var dx = self.x - curP[0], dy = self.y - curP[1];
-        var dist = Math.sqrt(dx*dx + dy*dy);
+        var dist = Math.sqrt(dx * dx + dy * dy);
         var cross = Math.cos(trackAng) * dy - Math.sin(trackAng) * dx;
-        inp.push(Math.max(-2, Math.min(2, (dist / (TW/2)) * (cross > 0 ? 1 : -1))));
+        var latPos = (dist / (TW / 2)) * (cross > 0 ? 1 : -1);
+        inp.push(Math.max(-1, Math.min(1, latPos)));
 
-        // 20. Lap Progress (0 to 1)
-        inp.push(self.prevIdx / n);
+        // 19: aceleracion delta (FIX #8) — cambio de velocidad normalizado
+        var accelDelta = (this.spd - this.prevSpd) / (internalAccelForce * 0.016 || 1);
+        inp.push(Math.max(-1, Math.min(1, accelDelta)));
+
+        // 20-21: dirección al próximo checkpoint (sin/cos del ángulo relativo)
+        // En curriculum: apunta al goal. En normal: al siguiente sector no visitado.
+        var curZone = (clTotalLen > 0 && clDist.length === n)
+            ? Math.floor((clDist[self.prevIdx] / clTotalLen) * self.ZONES)
+            : Math.floor((self.prevIdx / n) * self.ZONES);
+        var targetZone = curriculumMode
+            ? Math.min(curriculumSector, self.ZONES - 1)
+            : (curZone + 1) % self.ZONES;
+        var tIdx = zoneClIndexAI(targetZone, self.ZONES);
+        var tPt = CL[tIdx];
+        if (tPt) {
+            var angToCP = Math.atan2(tPt[1] - self.y, tPt[0] - self.x);
+            var relCP = angToCP - self.ang;
+            while (relCP > Math.PI) relCP -= Math.PI * 2;
+            while (relCP < -Math.PI) relCP += Math.PI * 2;
+            inp.push(Math.sin(relCP));
+            inp.push(Math.cos(relCP));
+        } else {
+            inp.push(0); inp.push(1);
+        }
     } else {
-        inp.push(0, 0, 0, 0, 0, 0);
+        // padding si no hay CL
+        for (var k = 0; k < 9; k++) inp.push(0);
     }
 
-    var out = this.net.fwd(inp);
-    // Neutral output (0) now means 0 throttle and 0 brake.
-    var thr = Math.max(0, out[0]); 
-    var brk = Math.max(0, out[1]);
-    this.thrOut = thr; this.brkOut = brk;
+    // guardar velocidad anterior para delta
+    this.prevSpd = this.spd;
 
-    // Acceleration & Braking Logic
-    var af = (thr * internalAccelForce);
-    if (brk > 0.4 && this.spd > 1.0) { // Only cut throttle if braking hard and moving
-        thr = 0; 
+    // ==================== FORWARD PASS ====================
+    var out = this.net.fwd(inp);
+
+    // FIX #2 + #3: output 0 = accel/brake combinado
+    // positivo = acelerar, negativo = frenar
+    // rango completo de tanh [-1,1]
+    var accelBrake = out[0]; // -1=frenar fuerte, 0=neutro, 1=acelerar fuerte
+    var thr = Math.max(0, accelBrake);   // 0 a 1
+    var brk = Math.max(0, -accelBrake);  // 0 a 1 (solo cuando negativo)
+    this.thrOut = thr;
+    this.brkOut = brk;
+
+    // ==================== FISICA ====================
+    if (brk > 0.1 && this.spd > 0.5) {
         this.spd = Math.max(0, this.spd - (internalAccelForce * 12 * brk * 0.016));
     }
-
     if (thr > 0.05) {
         this.spd += (thr * internalAccelForce) * 0.016;
-        this.spd *= 0.999; 
+        this.spd *= 0.999;
     } else if (brk <= 0.1) {
-        this.spd *= 0.98; 
+        this.spd *= 0.98;
     }
-    
-    // Final Cap at V-MAX
     this.spd = Math.max(0, Math.min(internalVmax, this.spd));
-    
-    // Steering & Maneuverability (Speed Sensitive)
-    var sr = this.spd / internalVmax; // Speed ratio
-    
-    // Base Steering Angle with speed-based reduction (Understeer)
-    // At high speed, the car turns much less.
-    var steerPower = 1.0 - (sr * 0.75); // Lose up to 75% steering at V-MAX
+
+    var sr = this.spd / internalVmax;
+    var steerPower = 1.0 - (sr * 0.75);
     var baseSteerAngle = (0.05 + (eManeuver / 100) * 0.1) * steerPower;
-    var si = out[2] * baseSteerAngle * (this.spd > 0.1 ? 1 : 0);
-    
-    // Engine Position & Drivetrain Impact
+    var si = out[1] * baseSteerAngle * (this.spd > 0.1 ? 1 : 0);
+
     var oversteerFactor = 0.2;
     if (p.engine === 'R') oversteerFactor = 0.45;
     else if (p.engine === 'F') oversteerFactor = 0.1;
 
-    var tractionGrip = 1;
     if (p.drivetrain === 'RWD') {
-        oversteerFactor *= (1 + thr * 0.5); // RWD oversteers more on power
+        oversteerFactor *= (1 + thr * 0.5);
     } else if (p.drivetrain === 'FWD') {
-        si *= (1 - thr * 0.3); // FWD understeers on power
+        si *= (1 - thr * 0.3);
         oversteerFactor *= 0.5;
     }
 
-    // Centrifugal Understeer (Go "long" physics)
-    // As speed increase, steering efficacy decreases if we exceed "grip"
     var gripThreshold = 0.2 + (eManeuver / 100) * 0.4;
     var lateralForce = Math.abs(si) * this.spd;
     if (lateralForce > gripThreshold) {
         var slipLoss = (lateralForce - gripThreshold) * 0.5;
-        si /= (1 + slipLoss); // Car goes "longer"
+        si /= (1 + slipLoss);
     }
 
-    this.ang += si + (this.slip * (oversteerFactor/10) * sr);
-    
-    // Slip Angle Calculation
+    this.ang += si + (this.slip * (oversteerFactor / 10) * sr);
+
     var gripStability = 0.3 + (eManeuver / 100) * 0.5;
     this.slip = Math.max(-40, Math.min(40, (this.slip + si * this.spd * oversteerFactor * 8) * (1 - gripStability * 0.1)));
-
     this.totalSlip += Math.abs(this.slip);
 
-    this.prevX = this.x; this.prevY = this.y;
-
-    // Movement Update
+    this.prevX = this.x;
+    this.prevY = this.y;
     var windShift = (p.wi || 0) * 0.004;
     this.x += Math.cos(this.ang) * this.spd + Math.sin(this.ang) * (this.slip * 0.012) - windShift;
     this.y += Math.sin(this.ang) * this.spd - Math.cos(this.ang) * (this.slip * 0.012);
@@ -307,13 +470,13 @@ Car.prototype.upd = function () {
     if (isNaN(this.x) || isNaN(this.y)) { this.x = 0; this.y = 0; this.alive = false; return; }
 
     var idx = nearCL(this.x, this.y);
-    
-    // MANUAL DEATH WALLS CHECK: Kill car if it hits a user-drawn red line
+
+    // Death walls
     if (loaded && typeof deathWalls !== 'undefined') {
         for (var i = 0; i < deathWalls.length; i++) {
             var wall = deathWalls[i];
             for (var j = 0; j < wall.length - 1; j++) {
-                if (lineIntersect(this.px, this.py, this.x, this.y, wall[j][0], wall[j][1], wall[j+1][0], wall[j+1][1])) {
+                if (lineIntersect(this.prevX, this.prevY, this.x, this.y, wall[j][0], wall[j][1], wall[j + 1][0], wall[j + 1][1])) {
                     this.alive = false;
                     this._fitness = this.calcFitness();
                     return;
@@ -322,50 +485,66 @@ Car.prototype.upd = function () {
         }
     }
 
-    // STRICT OFF-TRACK GEODETECTION: Kill car if it strays too far from the center line
+    // Off-track detection
     if (loaded && CL.length > 0 && CL[idx]) {
         var dx = this.x - CL[idx][0], dy = this.y - CL[idx][1];
-        var distSq = dx*dx + dy*dy;
-        var limit = (TW / 2) * (train.safety || 2.0); 
-        if (distSq > limit * limit) { 
-            this.alive = false; this._fitness = this.calcFitness(); return; 
+        var distSq = dx * dx + dy * dy;
+        var limit = (TW / 2) * (train.safety || 2.0);
+        if (distSq > limit * limit) { this.alive = false; this._fitness = this.calcFitness(); return; }
+    }
+
+    n = CL.length;
+    if (n === 0) return;
+
+    var fwd = (idx - this.prevIdx + n) % n;
+
+    // FIX #11: contar frames yendo al reves
+    if (fwd > n / 2) {
+        this.reverseFrames++;
+    }
+
+    if (fwd >= 0 && fwd < n / 2) {
+        if (fwd > 0) { this.totalD += fwd; this.stuck = 0; }
+        else { this.stuck++; }
+    } else {
+        this.stuck++;
+    }
+
+    // FIX #5: stuck limits — más agresivo para matar carros lentos/perdidos rápido
+    if (this.stuck > 100) {
+        this.alive = false;
+        this._fitness = this.calcFitness();
+        return;
+    }
+
+    var zone = (clTotalLen > 0 && clDist.length === n)
+        ? Math.floor((clDist[idx] / clTotalLen) * this.ZONES)
+        : Math.floor((idx / n) * this.ZONES);
+    if (!this.zonesHit[zone]) {
+        this.zonesHit[zone] = true;
+        this.lastZoneFrame = this.fc;
+    }
+
+    // FIX #5: zone timeout — eliminar carros atascados entre zonas más rápido
+    if (this.fc - this.lastZoneFrame > 250) {
+        this.alive = false;
+        this._fitness = this.calcFitness();
+        return;
+    }
+
+    // Curriculum mode: detect goal zone reached
+    if (curriculumMode) {
+        var goalZone = Math.min(curriculumSector, this.ZONES - 1);
+        if (!this.curriculumGoalHit && this.zonesHit[goalZone]) {
+            this.curriculumGoalHit = true;
         }
     }
 
-    var n = CL.length;
-    if (n === 0) return; 
-    var fwd = (idx - this.prevIdx + n) % n;
-    // Allow small progress or even neutral to reduce "stuck" sensitivity at start
-    if (fwd >= 0 && fwd < n / 2) { 
-        if (fwd > 0) { this.totalD += fwd; this.stuck = 0; }
-        else { this.stuck++; } // Still same point
-    } else { 
-        this.stuck++; // Backwards
-    }
-
-    // Increased stuck limit (10 seconds)
-    if (this.stuck > 600 || (this.fc - this.lastZoneFrame > 1500)) { 
-        this.alive = false; 
-        this._fitness = this.calcFitness(); 
-        return; 
-    }
-    
-    // Checkpoint progress check (10 seconds timeout)
-    var zone = Math.floor((idx / n) * this.ZONES);
-    if (!this.zonesHit[zone]) {
-        this.zonesHit[zone] = true;
-        this.lastZoneFrame = this.fc; // Reset timer when a new zone is reached
-    }
-
-    if (this.stuck > 420 || (this.fc - this.lastZoneFrame > 1200)) { 
-        this.alive = false; 
-        this._fitness = this.calcFitness(); 
-        return; 
-    }
     this.prevIdx = idx;
 
     if (this.crossCD > 0) { this.crossCD--; return; }
-    if (this.fc > 60 && checkCross(this.x, this.y, this.prevX, this.prevY)) {
+
+    if (!curriculumMode && this.fc > 60 && checkCross(this.x, this.y, this.prevX, this.prevY)) {
         if (this.lapCoverageOk()) {
             var lapF = this.fc - this.lapStartFrame;
             this.lapTimes.push(lapF);
@@ -373,48 +552,45 @@ Car.prototype.upd = function () {
                 gbl = lapF;
                 lastRecordGen = gen;
                 bestLapNet = JSON.parse(JSON.stringify(this.net.w));
-                if (typeof createProfileFromCar === 'function') {
-                    createProfileFromCar(this, true);
-                }
+                if (typeof createProfileFromCar === 'function') createProfileFromCar(this, true);
             }
-            // Reloop dead/finished cars in Compare/Race mode
-            if (compareCars.length > 0 && compareCars.filter(function(c){return c.alive}).length === 0) {
-                compareCars.forEach(function(c) {
+
+            // Compare/Race mode reloop
+            if (typeof compareCars !== 'undefined' && compareCars.length > 0 && compareCars.filter(function (c) { return c.alive; }).length === 0) {
+                compareCars.forEach(function (c) {
                     c.x = startLine.x; c.y = startLine.y; c.ang = startLine.ang;
-                    c.spd = 0; c.slip = 0; c.alive = true; c.finished = false;
+                    c.spd = 0; c.prevSpd = 0; c.slip = 0; c.alive = true; c.finished = false;
                     c.fc = 0; c.prevIdx = startLine.idx; c.totalD = 0; c.stuck = 0;
                     c.laps = 0; c.lapStartFrame = 0; c.finishFrame = 0; c.lapTimes = [];
-                    c.resetLapTracking(); c.crossCD = 0; c.tw = 1; c.totalSlip = 0;
-                    if (isRaceMode) {
-                        var strat = raceStrategy[profiles[c.id] ? profiles[c.id].id : 0] || { fuel: 50 };
-                        c.fuel = c.phys.fuelLiters || 50;
-                    }
+                    c.resetLapTracking(); c.crossCD = 0; c.tw = 1; c.totalSlip = 0; c.reverseFrames = 0;
                 });
             }
+
             this.laps++;
             this.lapStartFrame = this.fc;
             this.crossCD = 40;
             this.resetLapTracking();
-            this.lastZoneFrame = this.fc; // Reset zone timer on new lap
+            this.lastZoneFrame = this.fc;
+
             if (isRaceMode && useFuel) {
-                this.fuel = Math.max(0, this.fuel - (p.fpl || 2)); // Subtract fuel per lap
+                this.fuel = Math.max(0, this.fuel - (p.fpl || 2));
             }
-            this.resetLapTracking();
-            if (this.laps >= currentLaps) { 
-                this.finished = true; 
-                this.finishFrame = this.fc; 
-                this._fitness = this.calcFitness(); 
-                this.alive = false; 
-                if (finishTimer === -1) finishTimer = 300; // Start 5s countdown
+
+            if (this.laps >= currentLaps) {
+                this.finished = true;
+                this.finishFrame = this.fc;
+                this._fitness = this.calcFitness();
+                this.alive = false;
+                if (finishTimer === -1) finishTimer = 300;
             }
         } else {
-            this._fitness -= 2000; this.crossCD = 60; this.resetLapTracking();
+            this._fitness -= 2000;
+            this.crossCD = 60;
+            this.resetLapTracking();
         }
     }
 };
-Car.prototype.lapProgress = function () {
-    var hit = 0; for (var i = 0; i < this.ZONES; i++) if (this.zonesHit[i]) hit++; return hit / this.ZONES;
-};
+
 Car.prototype.draw = function (isBest, isTop3, showS) {
     if (!sctx) return;
     var alive = this.alive, finished = this.finished;
@@ -422,7 +598,10 @@ Car.prototype.draw = function (isBest, isTop3, showS) {
     if (showS && this.sens.length && alive) {
         sctx.globalAlpha = 0.1;
         var col = this.col;
-        this.sens.forEach(function (s) { sctx.beginPath(); sctx.moveTo(this.x, this.y); sctx.lineTo(s.ex, s.ey); sctx.strokeStyle = col; sctx.lineWidth = 0.8; sctx.stroke(); }, this);
+        this.sens.forEach(function (s) {
+            sctx.beginPath(); sctx.moveTo(this.x, this.y); sctx.lineTo(s.ex, s.ey);
+            sctx.strokeStyle = col; sctx.lineWidth = 0.8; sctx.stroke();
+        }, this);
     }
     if (!alive && !finished) {
         sctx.globalAlpha = 0.07; sctx.translate(this.x, this.y); sctx.rotate(this.ang); sctx.fillStyle = this.col;
@@ -437,19 +616,14 @@ Car.prototype.draw = function (isBest, isTop3, showS) {
     sctx.globalAlpha = finished ? 0.5 : 1;
     sctx.translate(this.x, this.y); sctx.rotate(this.ang);
     sctx.fillStyle = isBest ? '#ffeb3b' : isTop3 ? '#81c784' : this.col;
-    
-    // Rectangular Body
     var w = 14, h = 8;
     sctx.beginPath();
-    sctx.roundRect(-w/2, -h/2, w, h, 2);
+    sctx.roundRect(-w / 2, -h / 2, w, h, 2);
     sctx.fill();
-    
-    // Front and Back indication
     sctx.fillStyle = 'rgba(255,255,255,0.4)';
-    sctx.fillRect(w/2 - 4, -h/2 + 1, 3, h-2); // Front windshield
+    sctx.fillRect(w / 2 - 4, -h / 2 + 1, 3, h - 2);
     sctx.fillStyle = 'rgba(0,0,0,0.3)';
-    sctx.fillRect(-w/2 + 1, -h/2 + 1, 2, h-2); // Rear spoiler/area
-    
+    sctx.fillRect(-w / 2 + 1, -h / 2 + 1, 2, h - 2);
     if (isBest) { sctx.font = 'bold 7px sans-serif'; sctx.fillStyle = '#000'; sctx.textAlign = 'center'; sctx.fillText('1', 0, 3); }
     var prog = this.lapProgress();
     if (prog > 0 && alive) {
@@ -461,163 +635,498 @@ Car.prototype.draw = function (isBest, isTop3, showS) {
     sctx.restore();
 };
 
-// Evolution Management
+// ==================== CMA-ES (Sep-CMA-ES diagonal) ====================
+// Reemplaza la fase GA cuando está activo. Aprende qué combinaciones
+// de cambios de pesos mejoran el tiempo → converge mucho más rápido
+// que mutación aleatoria para fine-tuning de velocidad.
+
+var cmaes = {
+    active: false,
+    n: 0, lambda: 0, mu: 0,
+    weights: null, mueff: 0,
+    ps: null, pc: null,
+    mean: null, D: null,
+    sigma: 0.15,
+    cs: 0, ds: 0, cc: 0, c1: 0, cmu: 0, chiN: 0,
+    gen: 0,
+    zs: null, xs: null,
+    templateW: null,
+};
+
+function gaussRandom() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+function netFlatten(w) {
+    var v = [];
+    w.l1.forEach(function (row) { row.forEach(function (x) { v.push(x); }); });
+    w.b1.forEach(function (x) { v.push(x); });
+    w.l2.forEach(function (row) { row.forEach(function (x) { v.push(x); }); });
+    w.b2.forEach(function (x) { v.push(x); });
+    w.l3.forEach(function (row) { row.forEach(function (x) { v.push(x); }); });
+    w.b3.forEach(function (x) { v.push(x); });
+    return v;
+}
+
+function netUnflatten(v, templateW) {
+    var w = { l1: [], b1: [], l2: [], b2: [], l3: [], b3: [] };
+    var idx = 0;
+    w.l1 = templateW.l1.map(function (row) { return row.map(function () { return v[idx++]; }); });
+    w.b1 = templateW.b1.map(function () { return v[idx++]; });
+    w.l2 = templateW.l2.map(function (row) { return row.map(function () { return v[idx++]; }); });
+    w.b2 = templateW.b2.map(function () { return v[idx++]; });
+    w.l3 = templateW.l3.map(function (row) { return row.map(function () { return v[idx++]; }); });
+    w.b3 = templateW.b3.map(function () { return v[idx++]; });
+    return w;
+}
+
+function cmaesInit(seedNet, initSigma) {
+    var flat = netFlatten(seedNet.w);
+    var n = flat.length;
+    var lambda = train.pop;
+    var mu = Math.floor(lambda / 2);
+
+    // Pesos logarítmicos: los mejores candidatos pesan exponencialmente más
+    var rawW = [];
+    for (var i = 0; i < mu; i++) rawW.push(Math.log(mu + 0.5) - Math.log(i + 1));
+    var wSum = rawW.reduce(function (a, b) { return a + b; }, 0);
+    var weights = rawW.map(function (w) { return w / wSum; });
+    var mueff = 1 / weights.reduce(function (s, w) { return s + w * w; }, 0);
+
+    // Tasas de aprendizaje estándar Sep-CMA-ES
+    var cs = (mueff + 2) / (n + mueff + 5);
+    var ds = 1 + 2 * Math.max(0, Math.sqrt((mueff - 1) / (n + 1)) - 1) + cs;
+    var cc = (4 + mueff / n) / (n + 4 + 2 * mueff / n);
+    var c1 = 2 / ((n + 1.3) * (n + 1.3) + mueff);
+    var cmu = Math.min(1 - c1, 2 * (mueff - 2 + 1 / mueff) / ((n + 2) * (n + 2) + mueff));
+    var chiN = Math.sqrt(n) * (1 - 1 / (4 * n) + 1 / (21 * n * n));
+
+    cmaes.n = n; cmaes.lambda = lambda; cmaes.mu = mu;
+    cmaes.weights = weights; cmaes.mueff = mueff;
+    cmaes.cs = cs; cmaes.ds = ds; cmaes.cc = cc; cmaes.c1 = c1; cmaes.cmu = cmu; cmaes.chiN = chiN;
+    cmaes.mean = flat;
+    cmaes.D = new Array(n).fill(1.0);
+    cmaes.ps = new Array(n).fill(0);
+    cmaes.pc = new Array(n).fill(0);
+    cmaes.sigma = initSigma || 0.15;
+    cmaes.gen = 0;
+    cmaes.zs = null; cmaes.xs = null;
+    cmaes.templateW = JSON.parse(JSON.stringify(seedNet.w));
+    cmaes.active = true;
+}
+
+function cmaesGenPop() {
+    var n = cmaes.n, zs = [], xs = [], nets = [];
+    for (var k = 0; k < cmaes.lambda; k++) {
+        var z = [], x = [];
+        for (var i = 0; i < n; i++) {
+            var zi = gaussRandom();
+            z.push(zi);
+            x.push(cmaes.mean[i] + cmaes.sigma * Math.sqrt(Math.max(1e-10, cmaes.D[i])) * zi);
+        }
+        zs.push(z); xs.push(x);
+        nets.push(new Net(netUnflatten(x, cmaes.templateW)));
+    }
+    cmaes.zs = zs; cmaes.xs = xs;
+    return nets;
+}
+
+function cmaesUpdate(sortedIndices) {
+    var n = cmaes.n, mu = cmaes.mu;
+    var meanOld = cmaes.mean.slice();
+
+    // Nueva media: promedio ponderado de los mu mejores candidatos
+    var meanNew = new Array(n).fill(0);
+    for (var i = 0; i < mu; i++) {
+        var xi = cmaes.xs[sortedIndices[i]];
+        for (var j = 0; j < n; j++) meanNew[j] += cmaes.weights[i] * xi[j];
+    }
+    cmaes.mean = meanNew;
+
+    // Paso normalizado en espacio de búsqueda
+    var step = meanNew.map(function (m, i) { return (m - meanOld[i]) / cmaes.sigma; });
+
+    // Actualizar ps (evolution path para control de sigma)
+    var csFactor = Math.sqrt(cmaes.cs * (2 - cmaes.cs) * cmaes.mueff);
+    var psNormSq = 0;
+    for (var i = 0; i < n; i++) {
+        cmaes.ps[i] = (1 - cmaes.cs) * cmaes.ps[i]
+            + csFactor * step[i] / Math.sqrt(Math.max(1e-10, cmaes.D[i]));
+        psNormSq += cmaes.ps[i] * cmaes.ps[i];
+    }
+
+    // Adaptar sigma: aumenta si búsqueda activa, decrece al converger
+    var psNorm = Math.sqrt(psNormSq);
+    cmaes.sigma *= Math.exp((cmaes.cs / cmaes.ds) * (psNorm / cmaes.chiN - 1));
+    cmaes.sigma = Math.max(0.001, Math.min(1.5, cmaes.sigma));
+
+    // h_sigma: indicador para evitar path de covarianza inestable
+    var psNormNorm = psNorm / Math.sqrt(1 - Math.pow(1 - cmaes.cs, 2 * (cmaes.gen + 1)));
+    var hsig = (psNormNorm < (1.4 + 2 / (n + 1)) * cmaes.chiN) ? 1 : 0;
+
+    // Actualizar pc (evolution path para covarianza)
+    var ccFactor = Math.sqrt(cmaes.cc * (2 - cmaes.cc) * cmaes.mueff);
+    for (var i = 0; i < n; i++) {
+        cmaes.pc[i] = (1 - cmaes.cc) * cmaes.pc[i] + hsig * ccFactor * step[i];
+    }
+
+    // Actualizar diagonal de covarianza D (varianza por dimensión)
+    for (var i = 0; i < n; i++) {
+        var r1 = cmaes.c1 * cmaes.pc[i] * cmaes.pc[i];
+        var rmu = 0;
+        for (var k = 0; k < mu; k++) {
+            var zi = cmaes.zs[sortedIndices[k]][i];
+            rmu += cmaes.weights[k] * zi * zi;
+        }
+        cmaes.D[i] = (1 - cmaes.c1 - cmaes.cmu) * cmaes.D[i] + r1 + cmaes.cmu * rmu;
+        cmaes.D[i] = Math.max(1e-10, Math.min(1e6, cmaes.D[i]));
+    }
+    cmaes.gen++;
+}
+
+function cmaesToggle() {
+    if (cmaes.active) {
+        cmaes.active = false;
+        var el = document.getElementById('cmaes-toggle');
+        if (el) el.checked = false;
+        var info = document.getElementById('info-box');
+        if (info) info.innerHTML += '<br><span style="color:#ff8a65">CMA-ES desactivado — vuelve al GA estándar</span>';
+        return;
+    }
+    // Inicializar desde el mejor cerebro disponible
+    var seedNet = null;
+    if (bestLapNet) {
+        seedNet = new Net(JSON.parse(JSON.stringify(bestLapNet)));
+    } else if (cars.length > 0) {
+        var best = cars.slice().sort(function (a, b) { return b._fitness - a._fitness; })[0];
+        seedNet = best.net.clone();
+    }
+    if (!seedNet) {
+        alert('No hay red entrenada disponible. Entrena al menos una generación primero.');
+        var el = document.getElementById('cmaes-toggle');
+        if (el) el.checked = false;
+        return;
+    }
+    cmaesInit(seedNet, 0.15);
+    var info = document.getElementById('info-box');
+    if (info) info.innerHTML += '<br><span style="color:#00e676">CMA-ES activado — n=' + cmaes.n + ' dims, σ=' + cmaes.sigma.toFixed(3) + '</span>';
+}
+
+// ==================== EVOLUTION ====================
 function resetTraining() {
     gen = 0; gbl = Infinity; bestDistFound = 0; bestDistNet = null; cars = []; top3ids = new Set();
     lastRecordGen = 0; lastDistRecordGen = 0;
     currentLaps = train.lapStart; currentMut = train.mutBase;
     prevBestFitness = -Infinity; staleCount = 0;
     genHistory = [];
+    fineTuneActive = false; // FIX #10
+    if (curriculumMode) { curriculumSector = 1; bestCurriculumNet = null; }
+    cmaes.zs = null; cmaes.xs = null; // limpiar candidatos anteriores sin desactivar CMA-ES
+    // distributedSpawnMode no se resetea: persiste entre entrenamientos
     var info = document.getElementById('info-box');
     if (info) info.textContent = 'Entrenamiento reiniciado.';
 }
 
 function selectTop3(carList) {
+    // Curriculum: priorizar siempre autos que llegaron al goal
+    if (curriculumMode) {
+        var goalHitters = carList.filter(function (c) { return c.curriculumGoalHit; })
+            .sort(function (a, b) { return b._fitness - a._fitness; });
+        if (goalHitters.length >= 3) return { mode: 'curriculum-goal', selected: goalHitters.slice(0, 3) };
+        var byFit = carList.slice().sort(function (a, b) { return b._fitness - a._fitness; });
+        if (goalHitters.length > 0) {
+            var rest = byFit.filter(function (c) { return !c.curriculumGoalHit; });
+            return { mode: 'curriculum-mix', selected: goalHitters.concat(rest).slice(0, 3) };
+        }
+        return { mode: 'curriculum-explore', selected: byFit.slice(0, 3) };
+    }
     var finished = carList.filter(function (c) { return c.finished && c.laps >= currentLaps; });
-    if (finished.length >= 3) { finished.sort(function (a, b) { return a.finishFrame - b.finishFrame; }); return { mode: 'tiempo', selected: finished.slice(0, 3) }; }
+    if (finished.length >= 3) {
+        finished.sort(function (a, b) { return a.finishFrame - b.finishFrame; });
+        return { mode: 'tiempo', selected: finished.slice(0, 3) };
+    }
     if (finished.length > 0) {
         var rest = carList.filter(function (c) { return !c.finished; }).sort(function (a, b) { return b._fitness - a._fitness; });
         finished.sort(function (a, b) { return a.finishFrame - b.finishFrame; });
         return { mode: 'mixto', selected: finished.concat(rest).slice(0, 3) };
     }
-    // NO FINISHERS -> Selection by PURE DISTANCE
     return { mode: 'distancia', selected: carList.slice().sort(function (a, b) { return b.totalD - a.totalD; }).slice(0, 3) };
 }
 
 function newGen() {
     if (!loaded || CL.length < 10) return;
-    finishTimer = -1; // Reset countdown
+    finishTimer = -1;
+
     var selResult = { mode: 'init', selected: [] };
+
     if (cars.length > 0) {
         cars.forEach(function (c) { if (c.alive) { c.alive = false; c._fitness = c.calcFitness(); } });
+
+        // Presión de diversidad: niche counting por zona máxima alcanzada
+        // Autos que mueren todos en el mismo lugar se dividen el fitness → evita convergencia prematura
+        var nicheCounts = {};
+        cars.forEach(function (c) {
+            var maxZ = 0;
+            for (var z = c.ZONES - 1; z >= 0; z--) { if (c.zonesHit[z]) { maxZ = z; break; } }
+            c._nicheZone = maxZ;
+            nicheCounts[maxZ] = (nicheCounts[maxZ] || 0) + 1;
+        });
+        cars.forEach(function (c) {
+            var n = nicheCounts[c._nicheZone] || 1;
+            // Solo aplicar a exploradores: finalizadores deben converger en velocidad, no diversificarse
+            if (n > 1 && !c.finished) c._fitness /= Math.sqrt(n);
+        });
+
         selResult = selectTop3(cars);
+
         var bestFit = Math.max.apply(null, cars.map(function (c) { return c._fitness; }));
         var finCount = cars.filter(function (c) { return c.finished; }).length;
         var finRate = finCount / cars.length;
+
+        // FIX #4: solo UN bloque de staleCount, sin el segundo if(improved)
         var improved = bestFit > prevBestFitness * 1.01;
-        
-        // Auto Fine-Tuning Trigger: N gens without record improvement
-        if (gbl !== Infinity && gen - lastRecordGen > train.stagLimit && bestLapNet) {
-            lastRecordGen = gen; // Reset trigger
-            var info = document.getElementById('info-box');
-            if (info) info.innerHTML = '<span style="color:#ffb74d; font-weight:bold;">¡RECUPERACIÓN AUTOMÁTICA!</span> Reinyectando el mejor cerebro histórico por estancamiento.';
-            console.log("Auto-Recovery triggered: Reinjecting best lap brain.");
-            
-            // Override fineTuneProfile for this generation
-            fineTuneProfile = { net: JSON.parse(JSON.stringify(bestLapNet)) };
-            gen = 1; // Force a "re-launch" from the best base
+        if (improved) {
+            staleCount = 0;
+            currentMut = Math.max(train.mutMin, currentMut * 0.85);
+        } else {
+            staleCount++;
+            if (staleCount >= train.stale) {
+                currentMut = Math.min(train.mutMax, currentMut * 1.4);
+                staleCount = 0;
+            }
+        }
+        prevBestFitness = Math.max(prevBestFitness, bestFit);
+
+        // Distance record (fase exploratoria sin vueltas)
+        var genBestExplorer = cars.slice().sort(function (a, b) { return b.totalD - a.totalD; })[0];
+        if (gbl === Infinity && genBestExplorer && genBestExplorer.totalD > bestDistFound && genBestExplorer.totalD > 20) {
+            bestDistFound = genBestExplorer.totalD;
+            lastDistRecordGen = gen;
+            bestDistNet = JSON.parse(JSON.stringify(genBestExplorer.net.w));
+            if (typeof createProfileFromCar === 'function') createProfileFromCar(genBestExplorer, false, "EXPLORADOR (GEN " + gen + ")");
+        }
+
+        // Stagnation detection fase exploratoria
+        if (gbl === Infinity && bestDistNet && gen - lastDistRecordGen >= train.stagLimit) {
+            var doReset = !train.stagConfirm || confirm("ESTANCAMIENTO: nadie completo una vuelta en " + train.stagLimit + " gens. Reiniciar desde mejor explorador?");
+            if (doReset) {
+                lastDistRecordGen = gen;
+                fineTuneProfile = { net: JSON.parse(JSON.stringify(bestDistNet)) };
+                fineTuneActive = true; // FIX #10
+                gen = 0; staleCount = 0; currentMut = train.mutBase;
+            } else {
+                lastDistRecordGen = gen;
+            }
+        }
+
+        // Stagnation detection fase de vueltas
+        if (gbl !== Infinity && gen - lastRecordGen >= train.stagLimit && bestLapNet) {
+            var doReset2 = !train.stagConfirm || confirm("RECORD ESTANCADO " + train.stagLimit + " gens. Recuperar desde mejor cerebro historico?");
+            if (doReset2) {
+                lastRecordGen = gen;
+                fineTuneProfile = { net: JSON.parse(JSON.stringify(bestLapNet)) };
+                fineTuneActive = true; // FIX #10
+                gen = 0; staleCount = 0; currentMut = train.mutBase;
+            } else {
+                lastRecordGen = gen;
+            }
+        }
+
+        // Progresion de vueltas (solo fuera de curriculum)
+        if (!curriculumMode && finRate >= train.lapThresh && currentLaps < train.lapMax) {
+            currentLaps++;
+            staleCount = 0;
             currentMut = train.mutBase;
         }
 
-        if (improved) { staleCount = 0; currentMut = Math.max(train.mutMin, currentMut * 0.85); }
-        else { 
-            staleCount++; 
-            if (staleCount >= train.stale) { 
-                currentMut = Math.min(train.mutMax, currentMut * 1.4); 
-                staleCount = 0; 
-            } 
-        }
+        // Curriculum: avanzar sector + mutación adaptativa al hit rate
+        if (curriculumMode) {
+            var hitCount = cars.filter(function (c) { return c.curriculumGoalHit; }).length;
+            var hitRate = hitCount / cars.length;
 
-        // Distance Record Logic: Save the best explorer if no lap finished yet
-        var genBestExplorer = cars.slice().sort(function(a,b){ return b.totalD - a.totalD; })[0];
-        if (gbl === Infinity && genBestExplorer && genBestExplorer.totalD > bestDistFound && genBestExplorer.totalD > 20) {
-            bestDistFound = genBestExplorer.totalD;
-            lastDistRecordGen = gen; // Update distance record timestamp
-            bestDistNet = JSON.parse(JSON.stringify(genBestExplorer.net.w)); // Memorize the brain
-            if (typeof createProfileFromCar === 'function') {
-                createProfileFromCar(genBestExplorer, false, "EXPLORADOR (GEN " + gen + ")");
+            // Guardar mejor auto que llegó al goal (para seeding cross-sector)
+            var goalCars = cars.filter(function (c) { return c.curriculumGoalHit; })
+                .sort(function (a, b) { return b._fitness - a._fitness; });
+            if (goalCars.length > 0) {
+                bestCurriculumNet = JSON.parse(JSON.stringify(goalCars[0].net.w));
+            }
+
+            // Mutación adaptativa: si muchos llegan al goal → explotar (menos mutación)
+            // si pocos llegan → explorar (más mutación). Override del sistema estándar.
+            if (hitRate > 0.5) {
+                currentMut = Math.max(train.mutMin, currentMut * 0.75);
+            } else if (hitRate < 0.1 && bestCurriculumNet === null) {
+                currentMut = Math.min(train.mutMax, currentMut * 1.3);
+            }
+
+            if (hitRate >= curriculumThresh) {
+                curriculumSector++;
+                staleCount = 0;
+                prevBestFitness = -Infinity;
+
+                // Seed toda la próxima gen desde el mejor auto que llegó al goal
+                // con baja mutación para converger rápido en el nuevo sector
+                if (bestCurriculumNet) {
+                    fineTuneProfile = { net: JSON.parse(JSON.stringify(bestCurriculumNet)) };
+                    fineTuneActive = true;
+                    currentMut = train.mutBase * 0.4;
+                } else {
+                    currentMut = train.mutBase;
+                }
+
+                if (curriculumSector > 23) {
+                    curriculumMode = false;
+                    curriculumSector = 1;
+                    var info = document.getElementById('info-box');
+                    if (info) info.innerHTML += '<br><span style="color:#00e676">✓ Curriculum completo — modo vuelta activado</span>';
+                    if (typeof updateCurriculumUI === 'function') updateCurriculumUI();
+                }
             }
         }
-
-        // --- NEW DECISION POINTS (Confirmation Prompts - Synchronous) ---
-
-        // Case A: Stagnation in Explorer Phase (no laps done)
-        if (gbl === Infinity && bestDistNet && gen - lastDistRecordGen >= train.stagLimit) {
-            var doReset = !train.stagConfirm || confirm("⚠️ ESTANCAMIENTO DETECTADO\n\nNadie ha completado una vuelta tras " + train.stagLimit + " generaciones. ¿Deseas reiniciar el entrenamiento usando al mejor EXPLORADOR como base única y forzar el progreso?");
-            if (doReset) {
-                lastDistRecordGen = gen; 
-                fineTuneProfile = { net: JSON.parse(JSON.stringify(bestDistNet)) };
-                gen = 1; staleCount = 0; currentMut = train.mutBase;
-            } else {
-                lastDistRecordGen = gen; // Ignorar por otras N
-            }
-        }
-
-        // Case B: Stagnation in Lap Phase (lap record stalls)
-        if (gbl !== Infinity && gen - lastRecordGen >= train.stagLimit && bestLapNet) {
-            var doReset = !train.stagConfirm || confirm("⚠️ RÉCORD ESTANCADO\n\nLlevamos " + train.stagLimit + " generaciones sin mejorar el tiempo. ¿Deseas forzar una RECUPERACIÓN AUTOMÁTICA usando el mejor cerebro histórico?");
-            if (doReset) {
-                lastRecordGen = gen;
-                fineTuneProfile = { net: JSON.parse(JSON.stringify(bestLapNet)) };
-                gen = 1; staleCount = 0; currentMut = train.mutBase;
-            } else {
-                lastRecordGen = gen; // Ignorar por otras N
-            }
-        }
-
-        if (improved) { staleCount = 0; currentMut = Math.max(train.mutMin, currentMut * 0.85); }
-
-        var lapsIncreased = false;
-        if (finRate >= train.lapThresh && currentLaps < train.lapMax) { currentLaps++; staleCount = 0; currentMut = train.mutBase; lapsIncreased = true; }
 
         var avgFitness = cars.reduce(function (sum, c) { return sum + c._fitness; }, 0) / cars.length;
         var allLaps = cars.map(function (c) { return c.bestLap(); }).filter(function (l) { return l !== Infinity && l > 0; });
         var genBestLap = allLaps.length > 0 ? Math.min.apply(null, allLaps) : null;
-
         genHistory.push({
             gen: gen,
             bestLap: genBestLap,
             avgFitness: avgFitness,
-            completionRate: finRate,
-            lapsIncreased: lapsIncreased
+            completionRate: finRate
         });
-
-        prevBestFitness = Math.max(prevBestFitness, bestFit);
         if (typeof drawChart === 'function') drawChart();
 
         var info = document.getElementById('info-box');
         if (info) {
-            var modeStr = selResult.mode === 'tiempo' ? 'top 3 por tiempo' : selResult.mode === 'mixto' ? 'mixto tiempo+fitness' : 'top 3 por fitness';
-            var selStr = selResult.selected.map(function (c) { return c.finished ? (c.finishFrame / 60).toFixed(2) + 's' : 'fit:' + Math.round(c._fitness); }).join(' / ');
-            info.innerHTML = 'Gen <span>' + gen + '</span> | Mut: <span>' + currentMut.toFixed(3) + '</span> | Objeto: <span>' + currentLaps + 'v</span><br>Sel: <span>' + selStr + '</span>';
+            var modeStr = selResult.mode === 'tiempo' ? 'top3 tiempo' : selResult.mode === 'mixto' ? 'mixto' : 'distancia';
+            var selStr = selResult.selected.map(function (c) {
+                return c.finished ? (c.finishFrame / 60).toFixed(2) + 's' : 'fit:' + Math.round(c._fitness);
+            }).join(' / ');
+            if (curriculumMode) {
+                var goalZ = Math.min(curriculumSector, 23);
+                var hitC = cars.filter(function (c) { return c.curriculumGoalHit; }).length;
+                info.innerHTML = 'Gen <span>' + gen + '</span> | Mut: <span>' + currentMut.toFixed(3) + '</span> | <span style="color:#4fc3f7">CURRICULUM Sector ' + curriculumSector + '/23</span><br>Alcanzaron meta: <span style="color:#00e676">' + hitC + '/' + cars.length + '</span> (' + Math.round(hitC / cars.length * 100) + '%) | umbral: ' + Math.round(curriculumThresh * 100) + '%';
+            } else {
+                info.innerHTML = 'Gen <span>' + gen + '</span> | Mut: <span>' + currentMut.toFixed(3) + '</span> | Obj: <span>' + currentLaps + 'v</span><br>Sel: <span>' + selStr + '</span>';
+            }
+        }
+        if (typeof updateCurriculumUI === 'function') updateCurriculumUI();
+
+        // CMA-ES: actualizar media y covarianza con la generación evaluada
+        if (cmaes.active && cmaes.xs) {
+            var sortedIdx = cars.map(function (_, i) { return i; })
+                .sort(function (a, b) { return cars[b]._fitness - cars[a]._fitness; });
+            cmaesUpdate(sortedIdx);
+            // Mostrar sigma actual en info-box
+            var infoEl = document.getElementById('info-box');
+            if (infoEl) infoEl.innerHTML += ' | <span style="color:#ce93d8">CMA σ=' + cmaes.sigma.toFixed(4) + '</span>';
         }
     }
+
     gen++;
     top3ids = new Set(selResult.selected.map(function (c) { return c.id; }));
     var eliteNets = selResult.selected.map(function (c) { return c.net; });
     var newNets = [];
-    var eliteCount = Math.min(train.elite, eliteNets.length);
-    for (var i = 0; i < eliteCount; i++) newNets.push(eliteNets[i % eliteNets.length].clone());
-    
-    // Inject the all-time best explorer if no lap finished yet
-    if (gbl === Infinity && bestDistNet) {
-        newNets.push(new Net(JSON.parse(JSON.stringify(bestDistNet))));
-    }
 
-    for (var i = 0; i < eliteCount; i++) newNets.push(eliteNets[i % eliteNets.length].mut(currentMut * 0.3));
-    for (var i = 0; i < eliteCount; i++) newNets.push(eliteNets[i % eliteNets.length].mut(currentMut * 0.6));
-    var injectN = Math.floor(train.pop * train.inject);
-    for (var i = 0; i < injectN; i++) newNets.push(new Net());
-
-    // Fine-Tuning Injection: 100% of the population from the seed
-    if (fineTuneProfile && gen === 1) {
+    // FIX #10: usar fineTuneActive en lugar de gen===1
+    if (fineTuneActive && fineTuneProfile) {
         var baseSeed = new Net(fineTuneProfile.net);
-        newNets = []; // Total clear to remove stagnant models
-        console.log("Fine-Tuning pivot: Total reset to best-ever seed.");
-        while (newNets.length < train.pop) {
-            newNets.push(baseSeed.mut(currentMut * (Math.random() * 0.8)));
+        if (cmaes.active) {
+            // Si CMA-ES está activo, redirigir la media al nuevo seed en lugar de generar GA
+            cmaes.mean = netFlatten(baseSeed.w);
+            cmaes.ps = new Array(cmaes.n).fill(0);
+            cmaes.pc = new Array(cmaes.n).fill(0);
+            cmaes.D = new Array(cmaes.n).fill(1.0);
+            cmaes.sigma = 0.15;
+            newNets = cmaesGenPop();
+        } else {
+            newNets = [];
+            while (newNets.length < train.pop) {
+                newNets.push(baseSeed.mut(currentMut * (0.3 + Math.random() * 0.7)));
+            }
         }
+        fineTuneActive = false; // reset flag despues de aplicar
+        fineTuneProfile = null;
+    } else if (cmaes.active) {
+        // CMA-ES: muestrea desde la distribución aprendida
+        newNets = cmaesGenPop();
+        // Preservar la mejor élite exacta como seguro contra regresión
+        if (eliteNets.length > 0) newNets[newNets.length - 1] = eliteNets[0].clone();
     } else {
+        // Elite exactas
+        var eliteCount = Math.min(train.elite, eliteNets.length);
+        for (var i = 0; i < eliteCount; i++) newNets.push(eliteNets[i % eliteNets.length].clone());
+
+        // Inyectar mejor explorador si aun no hay vueltas
+        if (gbl === Infinity && bestDistNet) {
+            newNets.push(new Net(JSON.parse(JSON.stringify(bestDistNet))));
+        }
+
+        // Micro-mutaciones: ajustes mínimos para exprimir décimas de segundo
+        if (selResult.mode === 'tiempo') {
+            for (var i = 0; i < eliteCount; i++) newNets.push(eliteNets[i % eliteNets.length].mut(currentMut * 0.08));
+        }
+        // Mutaciones suaves de elite
+        for (var i = 0; i < eliteCount; i++) newNets.push(eliteNets[i % eliteNets.length].mut(currentMut * 0.3));
+        for (var i = 0; i < eliteCount; i++) newNets.push(eliteNets[i % eliteNets.length].mut(currentMut * 0.6));
+
+        // Crossover entre elite: combina conocimientos de distintos padres
+        if (eliteNets.length >= 2) {
+            var crossoverN = Math.max(2, Math.floor(train.pop * 0.2));
+            for (var i = 0; i < crossoverN; i++) {
+                var pA = eliteNets[Math.floor(Math.random() * eliteNets.length)];
+                var pB = eliteNets[Math.floor(Math.random() * eliteNets.length)];
+                if (pA !== pB) {
+                    newNets.push(pA.crossover(pB).mut(currentMut * 0.25));
+                }
+            }
+        }
+
+        // Inyección aleatoria: reducida en modo tiempo para no diluir genes rápidos
+        var injectFraction = (selResult.mode === 'tiempo') ? 0.05 : train.inject;
+        var injectN = Math.floor(train.pop * injectFraction);
+        for (var i = 0; i < injectN; i++) newNets.push(new Net());
+
+        // Relleno con mutaciones
         while (newNets.length < train.pop) {
             var base = eliteNets.length > 0 ? eliteNets[Math.floor(Math.random() * eliteNets.length)] : new Net();
             newNets.push(base.mut(currentMut * (0.7 + Math.random() * 0.6)));
         }
     }
+
     while (newNets.length > train.pop) newNets.pop();
-    cars = newNets.map(function (n, i) { 
+
+    cars = newNets.map(function (n, i) {
         var c = new Car(n, i, CCOLS[i % CCOLS.length]);
-        // Inherit current base tuning if applicable
         if (typeof currentAppliedTuning !== 'undefined') c.tuning = JSON.parse(JSON.stringify(currentAppliedTuning));
+
+        if (CL.length >= 10) {
+            var spawnZoneTarget = -1;
+            if (distributedSpawnMode) {
+                var ZONES = 24;
+                spawnZoneTarget = Math.floor((i / newNets.length) * ZONES + Math.random() * (ZONES / newNets.length)) % ZONES;
+            } else if (curriculumMode && curriculumIsolated) {
+                // Aislado: todos spawnean al inicio del sector actual (zona anterior al goal)
+                spawnZoneTarget = Math.max(0, curriculumSector - 1);
+            }
+            if (spawnZoneTarget >= 0) {
+                var ZONES = 24;
+                var spawnIdx = zoneClIndexAI(spawnZoneTarget, ZONES);
+                var pt = CL[spawnIdx];
+                var nextPt = CL[(spawnIdx + 1) % CL.length];
+                c.x = pt[0];
+                c.y = pt[1];
+                c.prevX = pt[0];
+                c.prevY = pt[1];
+                c.ang = Math.atan2(nextPt[1] - pt[1], nextPt[0] - pt[0]);
+                c.prevIdx = spawnIdx;
+                c.spawnZone = spawnZoneTarget;
+                c.crossCD = 30;
+            }
+        }
+
         return c;
     });
 }

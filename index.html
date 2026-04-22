@@ -48,7 +48,9 @@
                         <div class="tb">
                             <button id="btn-mode-track" class="ok active">Modo Pista</button>
                             <button id="btn-mode-walls" class="no">Modo Muros</button>
-                            <button id="btn-new-wall" style="background:var(--color-bg-surface-elevated); border:1px solid var(--color-danger); color:var(--color-danger); font-size:10px;">+ Nuevo Muro</button>
+                            <button id="btn-new-wall"
+                                style="background:var(--color-bg-surface-elevated); border:1px solid var(--color-danger); color:var(--color-danger); font-size:10px;">+
+                                Nuevo Muro</button>
                             <button id="btn-clr-walls" class="no">Borrar Muros</button>
                         </div>
                     </div>
@@ -61,7 +63,8 @@
                 <!-- Auto Dashboard Panel -->
                 <div class="panel" id="panel-auto">
                     <div class="auto-blueprint">
-                        <img src="blueprint_pro.png" alt="Blueprint" style="width:100%; height:120px; object-fit:cover; border-radius:12px; margin-bottom:16px; opacity:0.8; border:1px solid var(--color-border);">
+                        <img src="blueprint_pro.png" alt="Blueprint"
+                            style="width:100%; height:120px; object-fit:cover; border-radius:12px; margin-bottom:16px; opacity:0.8; border:1px solid var(--color-border);">
                         <div class="blueprint-overlay">
                             <h2 id="auto-name">PROTOTYPE-X1</h2>
                             <p id="auto-class">Performance Class: --</p>
@@ -91,7 +94,8 @@
                         <h3>Presets de Clase</h3>
                         <div class="tb">
                             <button class="pre" data-p="f1">F1</button>
-                            <button class="pre" data-p="f1_2026" style="border-color:var(--color-info); color:var(--color-info);">F1 2026</button>
+                            <button class="pre" data-p="f1_2026"
+                                style="border-color:var(--color-info); color:var(--color-info);">F1 2026</button>
                             <button class="pre" data-p="gt">GT</button>
                             <button class="pre" data-p="rally">Rally</button>
                             <button class="pre" data-p="drift">Drift</button>
@@ -140,7 +144,8 @@
                             <div id="applied-tuning-list" class="tuning-checklist">
                                 <!-- Applied tuning items here -->
                             </div>
-                            <button id="btn-open-tuning-editor" class="btn-full" style="margin-top:10px; font-size: 10px;">🛠 ADMINISTRAR PIEZAS</button>
+                            <button id="btn-open-tuning-editor" class="btn-full"
+                                style="margin-top:10px; font-size: 10px;">🛠 ADMINISTRAR PIEZAS</button>
                         </div>
                     </div>
                 </div>
@@ -149,41 +154,134 @@
                 <div class="panel" id="panel-train">
                     <div class="tool-group">
                         <h3>Población</h3>
-                        <div class="control-row"><label>Total <button class="info-btn" data-info="tpop">i</button> <span id="vtpop">28</span></label><input type="range" id="tpop" min="10" max="100" step="1" value="28"></div>
-                        <div class="control-row"><label>Elite copias <button class="info-btn" data-info="telite">i</button> <span id="vtelite">3</span></label><input type="range" id="telite" min="1" max="10" step="1" value="3"></div>
-                        <div class="control-row"><label>Inyección Aleatoria <button class="info-btn" data-info="tinject">i</button> <span id="vtinject">20</span>%</label><input type="range" id="tinject" min="0" max="0.5" step="0.05" value="0.2"></div>
+                        <div class="control-row"><label>Total <button class="info-btn" data-info="tpop">i</button> <span
+                                    id="vtpop">28</span></label><input type="range" id="tpop" min="10" max="100"
+                                step="1" value="28"></div>
+                        <div class="control-row"><label>Elite copias <button class="info-btn"
+                                    data-info="telite">i</button> <span id="vtelite">3</span></label><input type="range"
+                                id="telite" min="1" max="10" step="1" value="3"></div>
+                        <div class="control-row"><label>Inyección Aleatoria <button class="info-btn"
+                                    data-info="tinject">i</button> <span id="vtinject">20</span>%</label><input
+                                type="range" id="tinject" min="0" max="0.5" step="0.05" value="0.2"></div>
                     </div>
 
                     <div class="tool-group">
                         <h3>Mutación Adaptativa</h3>
-                        <div class="control-row"><label>Base <button class="info-btn" data-info="tmut">i</button> <span id="vtmut">0.15</span></label><input type="range" id="tmut" min="0.02" max="0.5" step="0.01" value="0.15"></div>
-                        <div class="control-row"><label>Mínima <button class="info-btn" data-info="tmutmin">i</button> <span id="vtmutmin">0.05</span></label><input type="range" id="tmutmin" min="0.01" max="0.2" step="0.01" value="0.05"></div>
-                        <div class="control-row"><label>Máxima <button class="info-btn" data-info="tmutmax">i</button> <span id="vtmutmax">0.45</span></label><input type="range" id="tmutmax" min="0.1" max="0.8" step="0.05" value="0.45"></div>
-                        <div class="control-row"><label>Gens estancado <button class="info-btn" data-info="tstale">i</button> <span id="vtstale">3</span></label><input type="range" id="tstale" min="1" max="15" step="1" value="3"></div>
+                        <div class="control-row"><label>Base <button class="info-btn" data-info="tmut">i</button> <span
+                                    id="vtmut">0.15</span></label><input type="range" id="tmut" min="0.02" max="0.5"
+                                step="0.01" value="0.15"></div>
+                        <div class="control-row"><label>Mínima <button class="info-btn" data-info="tmutmin">i</button>
+                                <span id="vtmutmin">0.05</span></label><input type="range" id="tmutmin" min="0.01"
+                                max="0.2" step="0.01" value="0.05"></div>
+                        <div class="control-row"><label>Máxima <button class="info-btn" data-info="tmutmax">i</button>
+                                <span id="vtmutmax">0.45</span></label><input type="range" id="tmutmax" min="0.1"
+                                max="0.8" step="0.05" value="0.45"></div>
+                        <div class="control-row"><label>Gens estancado <button class="info-btn"
+                                    data-info="tstale">i</button> <span id="vtstale">3</span></label><input type="range"
+                                id="tstale" min="1" max="15" step="1" value="3"></div>
                     </div>
 
                     <div class="tool-group">
                         <h3>Fitness Reward</h3>
-                        <div class="control-row"><label>Peso Tiempo/Dist <button class="info-btn" data-info="tftime">i</button> <span id="vtftime">0.70</span></label><input type="range" id="tftime" min="0" max="1" step="0.05" value="0.7"></div>
-                        <div class="control-row"><label>Penalty Frame <button class="info-btn" data-info="tfpen">i</button> <span id="vtfpen">0.50</span></label><input type="range" id="tfpen" min="0" max="2" step="0.05" value="0.5"></div>
-                        <div class="control-row"><label>Bonus Vuelta <button class="info-btn" data-info="tfbonus">i</button> <span id="vtfbonus">8000</span></label><input type="range" id="tfbonus" min="1000" max="20000" step="500" value="8000"></div>
-                        <div class="control-row" style="border-top:1px solid rgba(255,255,255,0.05); padding-top:10px; margin-top:10px;">
-                            <label style="color:var(--color-warning)">⚠️ Margen Fuera de Pista <span id="vtsfty">2.5</span>x</label>
+                        <div class="control-row"><label>Peso Tiempo/Dist <button class="info-btn"
+                                    data-info="tftime">i</button> <span id="vtftime">0.70</span></label><input
+                                type="range" id="tftime" min="0" max="1" step="0.05" value="0.7"></div>
+                        <div class="control-row"><label>Penalty Frame <button class="info-btn"
+                                    data-info="tfpen">i</button> <span id="vtfpen">0.50</span></label><input
+                                type="range" id="tfpen" min="0" max="2" step="0.05" value="0.5"></div>
+                        <div class="control-row"><label>Bonus Vuelta <button class="info-btn"
+                                    data-info="tfbonus">i</button> <span id="vtfbonus">8000</span></label><input
+                                type="range" id="tfbonus" min="1000" max="20000" step="500" value="8000"></div>
+                        <div class="control-row"
+                            style="border-top:1px solid rgba(255,255,255,0.05); padding-top:10px; margin-top:10px;">
+                            <label style="color:var(--color-warning)">⚠️ Margen Fuera de Pista <span
+                                    id="vtsfty">2.5</span>x</label>
                             <input type="range" id="tsfty" min="0" max="6.0" step="0.1" value="2.5">
                         </div>
                     </div>
 
                     <div class="tool-group">
                         <h3>Progresión y Vueltas</h3>
-                        <div class="control-row"><label>Vueltas Start <button class="info-btn" data-info="tlapst">i</button> <span id="vtlapst">1</span></label><input type="range" id="tlapst" min="1" max="10" step="1" value="1"></div>
-                        <div class="control-row"><label>Vueltas Max <button class="info-btn" data-info="tlapmax">i</button> <span id="vtlapmax">8</span></label><input type="range" id="tlapmax" min="1" max="100" step="1" value="8"></div>
-                        <div class="control-row"><label>Cobertura Mínima <button class="info-btn" data-info="tlapvalid">i</button> <span id="vtlapvalid">85</span>%</label><input type="range" id="tlapvalid" min="0.5" max="1" step="0.05" value="0.85"></div>
+                        <div class="control-row"><label>Vueltas Start <button class="info-btn"
+                                    data-info="tlapst">i</button> <span id="vtlapst">1</span></label><input type="range"
+                                id="tlapst" min="1" max="10" step="1" value="1"></div>
+                        <div class="control-row"><label>Vueltas Max <button class="info-btn"
+                                    data-info="tlapmax">i</button> <span id="vtlapmax">8</span></label><input
+                                type="range" id="tlapmax" min="1" max="100" step="1" value="8"></div>
+                        <div class="control-row"><label>Cobertura Mínima <button class="info-btn"
+                                    data-info="tlapvalid">i</button> <span id="vtlapvalid">85</span>%</label><input
+                                type="range" id="tlapvalid" min="0.5" max="1" step="0.05" value="0.85"></div>
+                    </div>
+
+                    <div class="tool-group">
+                        <h3 style="color:#ce93d8">Modo de Spawn</h3>
+                        <div class="control-row" style="margin-bottom:6px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="distributed-toggle"> Spawn Distribuido
+                            </label>
+                        </div>
+                        <div style="font-size:11px; color:#888; padding:4px 0 4px 4px; line-height:1.5;">
+                            Cada auto arranca en una zona aleatoria del circuito. Cubre todo el mapa desde la gen 1. Incompatible con Curriculum.
+                        </div>
+                    </div>
+
+                    <div class="tool-group" id="curriculum-group">
+                        <h3 style="color:#ff9800">Curriculum Learning</h3>
+                        <div class="control-row" style="margin-bottom:8px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="curriculum-toggle"> Activar Modo Curriculum
+                            </label>
+                        </div>
+                        <div id="curriculum-controls" style="display:none;">
+                            <div class="control-row">
+                                <label>Umbral por sector <span id="vcurr-thresh">60</span>%</label>
+                                <input type="range" id="curr-thresh" min="0.2" max="1" step="0.05" value="0.6">
+                            </div>
+
+                            <!-- Navegación manual de sectores -->
+                            <div style="margin-top:8px; padding:6px 8px; background:rgba(255,152,0,0.08); border-radius:4px;">
+                                <div style="font-size:11px; color:#aaa; margin-bottom:6px;">Sector objetivo</div>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <button id="curr-sector-prev" style="width:28px; height:28px; font-size:14px; background:rgba(255,152,0,0.2); border:1px solid rgba(255,152,0,0.4); color:#ff9800; border-radius:4px; cursor:pointer;">◀</button>
+                                    <span style="flex:1; text-align:center; font-size:15px; font-weight:bold; color:#ff9800;" id="curr-sector-display">1 / 23</span>
+                                    <button id="curr-sector-next" style="width:28px; height:28px; font-size:14px; background:rgba(255,152,0,0.2); border:1px solid rgba(255,152,0,0.4); color:#ff9800; border-radius:4px; cursor:pointer;">▶</button>
+                                </div>
+                                <div style="margin-top:6px; font-size:11px; color:#aaa;">
+                                    Alcanzaron meta: <span id="curr-hit-display" style="color:#00e676;">—</span>
+                                </div>
+                            </div>
+
+                            <!-- Toggle acumulativo / aislado -->
+                            <div style="margin-top:8px; display:flex; gap:0; border-radius:4px; overflow:hidden; border:1px solid rgba(255,152,0,0.3);">
+                                <button id="curr-mode-cumul" style="flex:1; padding:5px; font-size:11px; font-weight:bold; background:rgba(255,152,0,0.4); color:#ff9800; border:none; cursor:pointer;">Acumulativo</button>
+                                <button id="curr-mode-isol" style="flex:1; padding:5px; font-size:11px; font-weight:bold; background:transparent; color:#666; border:none; cursor:pointer;">Aislado</button>
+                            </div>
+                            <div style="font-size:10px; color:#666; margin-top:4px; line-height:1.4;" id="curr-mode-desc">
+                                Spawn zona 0 → llegar al sector N
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tool-group" style="border:1px solid rgba(206,147,216,0.3); background:rgba(206,147,216,0.04); border-radius:6px; padding:10px;">
+                        <h3 style="color:#ce93d8">CMA-ES — Optimización de Tiempo</h3>
+                        <div class="control-row" style="margin-bottom:6px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="cmaes-toggle"> Activar CMA-ES
+                            </label>
+                        </div>
+                        <div id="cmaes-status" style="font-size:11px; color:#888; padding:4px 0 2px 4px; line-height:1.6;">
+                            Desactivado — usa GA estándar
+                        </div>
+                        <div style="font-size:10px; color:#666; padding:2px 4px; line-height:1.4;">
+                            Aprende qué cambios de pesos mejoran el tiempo. Activar después de que la IA ya complete vueltas.
+                        </div>
                     </div>
 
                     <div class="tool-group">
                         <h3>Estancamiento</h3>
                         <div class="control-row">
-                            <label>Límite de Gens <button class="info-btn" data-info="tstaglimit">i</button> <span id="vtstaglimit">100</span></label>
+                            <label>Límite de Gens <button class="info-btn" data-info="tstaglimit">i</button> <span
+                                    id="vtstaglimit">100</span></label>
                             <input type="range" id="tstaglimit" min="20" max="500" step="10" value="100">
                         </div>
                         <div class="control-row" style="margin-top:8px;">
@@ -199,25 +297,32 @@
                     <div class="tool-group">
                         <h3>Gestión de Perfiles</h3>
                         <div class="tb">
-                            <button id="btn-capture-profile" class="ok btn-full" style="margin-bottom:8px;">📷 Capturar Mejor Actual</button>
+                            <button id="btn-capture-profile" class="ok btn-full" style="margin-bottom:8px;">📷 Capturar
+                                Mejor Actual</button>
                             <button id="btn-import-profile" class="btn-full">📂 Importar Perfil (JSON)</button>
                             <input type="file" id="profile-file" accept=".json" style="display:none">
                         </div>
                     </div>
                     <div class="tool-group">
                         <h3>Biblioteca</h3>
-                        <div id="profiles-list" style="display:flex; flex-direction:column; gap:8px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
-                            <div style="font-size: 11px; color: var(--color-text-dim); text-align: center; margin-top: 20px;">No hay perfiles guardados.</div>
+                        <div id="profiles-list"
+                            style="display:flex; flex-direction:column; gap:8px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
+                            <div
+                                style="font-size: 11px; color: var(--color-text-dim); text-align: center; margin-top: 20px;">
+                                No hay perfiles guardados.</div>
                         </div>
                     </div>
-                    <button id="btn-start-compare" class="btn-full on" disabled style="margin-top: 16px; opacity: 0.5;">INICIAR COMPARACIÓN (0)</button>
-                    <button id="btn-open-race" class="btn-full ok" disabled style="margin-top: 8px; opacity: 0.5;">🏁 MODO CARRERA (0)</button>
+                    <button id="btn-start-compare" class="btn-full on" disabled
+                        style="margin-top: 16px; opacity: 0.5;">INICIAR COMPARACIÓN (0)</button>
+                    <button id="btn-open-race" class="btn-full ok" disabled style="margin-top: 8px; opacity: 0.5;">🏁
+                        MODO CARRERA (0)</button>
                 </div>
             </div>
 
             <div class="sidebar-footer">
                 <div class="action-bar">
-                    <button id="bstart" class="ok btn-start" title="Iniciar/Pausar Entrenamiento"><span>INICIAR</span></button>
+                    <button id="bstart" class="ok btn-start"
+                        title="Iniciar/Pausar Entrenamiento"><span>INICIAR</span></button>
                     <button id="bnext" title="Próxima Generación">⏩</button>
                     <button id="bsp" title="Velocidad de Simulación">1x</button>
                     <div class="v-sep"></div>
@@ -236,7 +341,8 @@
             <!-- Bottom Drawer Ranking Window -->
             <div id="ranking-window" class="bottom-drawer hidden">
                 <div class="bd-header" id="btn-toggle-rk">
-                    <span style="display:flex; align-items:center; gap:8px;">RANKING EN TIEMPO REAL <span id="rk-arrow" style="font-size:14px; opacity:0.8;">▲</span></span>
+                    <span style="display:flex; align-items:center; gap:8px;">RANKING EN TIEMPO REAL <span id="rk-arrow"
+                            style="font-size:14px; opacity:0.8;">▲</span></span>
                 </div>
                 <div id="ranking-content">
                     <div class="pills-wrapper">
@@ -255,18 +361,21 @@
                     </div>
                     <div class="lb-container" style="border:none; border-radius:0;">
                         <div class="lb-header" id="lbh"></div>
-                        <div id="lbb" style="max-height: 250px; overflow-y: auto;"></div>
+                        <div id="lbb" style="max-height: 60vh; overflow-y: auto;"></div>
                     </div>
                 </div>
             </div>
 
-            <div id="compare-hud" class="hidden" style="position: absolute; top: 24px; left: 24px; width: 340px; background: rgba(10, 10, 12, 0.9); backdrop-filter: blur(20px); border: 1px solid var(--color-border); border-radius: 12px; z-index: 250; color: #fff; padding: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
-                <h3 style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; color: var(--color-info); display: flex; justify-content: space-between;">
+            <div id="compare-hud" class="hidden"
+                style="position: absolute; top: 24px; left: 24px; width: 340px; background: rgba(10, 10, 12, 0.9); backdrop-filter: blur(20px); border: 1px solid var(--color-border); border-radius: 12px; z-index: 250; color: #fff; padding: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+                <h3
+                    style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; color: var(--color-info); display: flex; justify-content: space-between;">
                     <span>Modo Comparación</span>
                     <span id="compare-status" style="color: var(--color-text-dim);">Corriendo...</span>
                 </h3>
                 <div id="compare-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
-                <button id="btn-exit-compare" class="no btn-full" style="margin-top: 16px;">SALIR DE COMPARACIÓN</button>
+                <button id="btn-exit-compare" class="no btn-full" style="margin-top: 16px;">SALIR DE
+                    COMPARACIÓN</button>
             </div>
 
             <!-- HUD Overlay -->
@@ -282,13 +391,21 @@
                     <div>Vivos <span id="sa" style="color: var(--color-info); font-weight: 700;">0/0</span></div>
                     <div id="stag-hud-box" class="hidden" style="display:flex; align-items:center; gap:8px;">
                         <div style="width: 1px; background: var(--color-border); height: 12px; margin: 0 4px;"></div>
-                        <div>Intento <span id="sstag" style="color: var(--color-warning); font-weight: 700;">0/100</span></div>
+                        <div>Intento <span id="sstag"
+                                style="color: var(--color-warning); font-weight: 700;">0/100</span></div>
                     </div>
                 </div>
                 <div class="hud-item">
                     <div>Record <span id="srec" style="color: var(--color-warning); font-weight: 700;">--</span></div>
                     <div style="width: 1px; background: var(--color-border);"></div>
                     <div>Mejor <span id="sbl" style="color: var(--color-success); font-weight: 700;">--</span></div>
+                </div>
+                <div class="hud-item" title="Tiempo mínimo teórico según física del auto y trazado geométrico ideal">
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        <span style="font-size:9px; letter-spacing:0.5px; color:#888;">TEÓRICO</span>
+                        <span style="width:8px; height:8px; border-radius:50%; background:linear-gradient(135deg,#00e5ff,#ff1744); display:inline-block;"></span>
+                    </div>
+                    <div style="font-size:17px; font-weight:700; color:#ce93d8;" id="steo">--</div>
                 </div>
             </div>
 
@@ -301,10 +418,12 @@
             <div id="chart-window" class="floating-chart hidden">
                 <div class="fc-header">
                     <span>HISTORIAL DE ENTRENAMIENTO</span>
-                    <button id="btn-close-chart" class="vp-btn" style="width:20px; height:20px; font-size:10px; background:transparent; color:#fff; border:none; cursor:pointer;">X</button>
+                    <button id="btn-close-chart" class="vp-btn"
+                        style="width:20px; height:20px; font-size:10px; background:transparent; color:#fff; border:none; cursor:pointer;">X</button>
                 </div>
                 <div style="flex: 1; padding: 12px; position: relative;">
-                    <canvas id="chart-canvas" style="width:100%; height:100%; background: rgba(0,0,0,0.3); border-radius: 8px;"></canvas>
+                    <canvas id="chart-canvas"
+                        style="width:100%; height:100%; background: rgba(0,0,0,0.3); border-radius: 8px;"></canvas>
                 </div>
             </div>
 
@@ -319,97 +438,111 @@
         </main>
     </div>
 
-            <!-- Tuning Editor Modal -->
-            <div id="modal-tuning-editor" class="modal-overlay hidden">
-                <div class="modal-content tuning-modal" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h2>🛠 ADMINISTRADOR DE PIEZAS</h2>
-                        <button class="close-modal-tune">✕</button>
-                    </div>
-                    <div class="modal-body">
-                        <div id="tuning-items-library" class="tuning-lib-list">
-                            <!-- List of all created tuning items -->
+    <!-- Tuning Editor Modal -->
+    <div id="modal-tuning-editor" class="modal-overlay hidden">
+        <div class="modal-content tuning-modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>🛠 ADMINISTRADOR DE PIEZAS</h2>
+                <button class="close-modal-tune">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="tuning-items-library" class="tuning-lib-list">
+                    <!-- List of all created tuning items -->
+                </div>
+                <hr style="border:none; border-top:1px solid var(--color-border); margin:16px 0;">
+                <h3>CREAR NUEVA PIEZA</h3>
+                <div class="tuning-form">
+                    <input type="text" id="tune-name" placeholder="Nombre (ej: Turbo Etapa 1)"
+                        style="width:100%; padding:10px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:8px; color:#fff; margin-bottom:12px;">
+                    <div class="tune-params-grid" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+                        <div class="tuning-input-group"><label
+                                style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ
+                                V-MAX</label><input type="number" id="tune-vmax" value="10"
+                                style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:#fff;">
                         </div>
-                        <hr style="border:none; border-top:1px solid var(--color-border); margin:16px 0;">
-                        <h3>CREAR NUEVA PIEZA</h3>
-                        <div class="tuning-form">
-                            <input type="text" id="tune-name" placeholder="Nombre (ej: Turbo Etapa 1)" style="width:100%; padding:10px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:8px; color:#fff; margin-bottom:12px;">
-                            <div class="tune-params-grid" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-                                <div class="tuning-input-group"><label style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ V-MAX</label><input type="number" id="tune-vmax" value="10" style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:#fff;"></div>
-                                <div class="tuning-input-group"><label style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ 0-100</label><input type="number" id="tune-accel" value="-0.5" step="0.1" style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:var(--color-success);"></div>
-                                <div class="tuning-input-group"><label style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ MANIOBRA</label><input type="number" id="tune-maneuver" value="5" style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:var(--color-accent);"></div>
-                            </div>
-                            <button id="btn-save-tune" class="ok btn-full" style="margin-top:16px;">GUARDAR PIEZA</button>
+                        <div class="tuning-input-group"><label
+                                style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ
+                                0-100</label><input type="number" id="tune-accel" value="-0.5" step="0.1"
+                                style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:var(--color-success);">
+                        </div>
+                        <div class="tuning-input-group"><label
+                                style="font-size:9px; color:var(--color-text-dim); display:block; margin-bottom:4px;">Δ
+                                MANIOBRA</label><input type="number" id="tune-maneuver" value="5"
+                                style="width:100%; padding:8px; background:var(--color-bg-surface); border:1px solid var(--color-border); border-radius:6px; color:var(--color-accent);">
+                        </div>
+                    </div>
+                    <button id="btn-save-tune" class="ok btn-full" style="margin-top:16px;">GUARDAR PIEZA</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Race Setup Modal -->
+    <div id="modal-race-setup" class="modal-overlay hidden">
+        <div class="modal-content race-modal">
+            <div class="modal-header">
+                <h2>⚙️ CONFIGURACIÓN DE GRAN PREMIO</h2>
+                <button class="close-modal">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="race-setup-grid">
+                    <!-- Global Settings -->
+                    <div class="setup-section">
+                        <h3>🏆 Reglas de Carrera</h3>
+                        <div class="control-row">
+                            <label>Vueltas</label>
+                            <input type="number" id="race-laps" value="5" min="1" max="200">
+                        </div>
+                        <div class="control-row" style="margin-top:12px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="race-use-fuel" checked> ⛽ Simular Consumo de Nafta
+                            </label>
+                        </div>
+                        <div class="control-row" style="margin-top:12px;">
+                            <label>Pista: <span id="race-track-name" style="color:var(--color-info);">--</span></label>
+                        </div>
+                        <button id="btn-race-change-track" class="btn-full"
+                            style="font-size:10px; margin-top:10px;">CAMBIAR PISTA</button>
+                    </div>
+
+                    <!-- Competitors -->
+                    <div class="setup-section" style="flex: 2.5;">
+                        <h3>🏎️ Grilla de Partida</h3>
+                        <div id="race-competitors-list" class="race-grid-scroll">
+                            <!-- Dynamic list of cars -->
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Race Setup Modal -->
-            <div id="modal-race-setup" class="modal-overlay hidden">
-                <div class="modal-content race-modal">
-                    <div class="modal-header">
-                        <h2>⚙️ CONFIGURACIÓN DE GRAN PREMIO</h2>
-                        <button class="close-modal">✕</button>
-                    </div>
-                    
-                    <div class="modal-body">
-                        <div class="race-setup-grid">
-                            <!-- Global Settings -->
-                            <div class="setup-section">
-                                <h3>🏆 Reglas de Carrera</h3>
-                                <div class="control-row">
-                                    <label>Vueltas</label>
-                                    <input type="number" id="race-laps" value="5" min="1" max="200">
-                                </div>
-                                <div class="control-row" style="margin-top:12px;">
-                                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                                        <input type="checkbox" id="race-use-fuel" checked> ⛽ Simular Consumo de Nafta
-                                    </label>
-                                </div>
-                                <div class="control-row" style="margin-top:12px;">
-                                    <label>Pista: <span id="race-track-name" style="color:var(--color-info);">--</span></label>
-                                </div>
-                                <button id="btn-race-change-track" class="btn-full" style="font-size:10px; margin-top:10px;">CAMBIAR PISTA</button>
-                            </div>
-                            
-                            <!-- Competitors -->
-                            <div class="setup-section" style="flex: 2.5;">
-                                <h3>🏎️ Grilla de Partida</h3>
-                                <div id="race-competitors-list" class="race-grid-scroll">
-                                    <!-- Dynamic list of cars -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="modal-footer">
-                        <button class="no close-modal">VOLVER</button>
-                        <button id="btn-launch-race" class="ok btn-full" style="padding: 12px 40px;">LARGADA 🏁</button>
-                    </div>
-                </div>
+            <div class="modal-footer">
+                <button class="no close-modal">VOLVER</button>
+                <button id="btn-launch-race" class="ok btn-full" style="padding: 12px 40px;">LARGADA 🏁</button>
             </div>
+        </div>
+    </div>
 
-            <!-- Full-Screen Race Mode Overlay -->
-            <div id="screen-race" class="screen-overlay hidden">
-                <!-- Race TV Leaderboard -->
-                <div class="race-tv-leaderboard">
-                    <div class="tv-header">POSICIONES <span id="race-tv-laps">0/0</span></div>
-                    <div id="race-tv-list" class="tv-list"></div>
-                </div>
+    <!-- Full-Screen Race Mode Overlay -->
+    <div id="screen-race" class="screen-overlay hidden">
+        <!-- Race TV Leaderboard -->
+        <div class="race-tv-leaderboard">
+            <div class="tv-header">POSICIONES <span id="race-tv-laps">0/0</span></div>
+            <div id="race-tv-list" class="tv-list"></div>
+        </div>
 
-                <!-- Bottom Telemetry Bar -->
-                <div class="race-telemetry-bar">
-                    <div id="telemetry-grid"></div>
-                </div>
+        <!-- Bottom Telemetry Bar -->
+        <div class="race-telemetry-bar">
+            <div id="telemetry-grid"></div>
+        </div>
 
-                <!-- Race Controls (Floating) -->
-                <div class="race-floating-controls">
-                    <button id="btn-race-pause" title="Pausa">⏸</button>
-                    <button id="btn-race-speed" title="Velocidad">1x</button>
-                    <button id="btn-exit-race" class="no" style="font-size:10px; font-weight:800;">SALIR A BOXES</button>
-                </div>
-            </div>
+        <!-- Race Controls (Floating) -->
+        <div class="race-floating-controls">
+            <button id="btn-race-pause" title="Pausa">⏸</button>
+            <button id="btn-race-speed" title="Velocidad">1x</button>
+            <button id="btn-exit-race" class="no" style="font-size:10px; font-weight:800;">SALIR A BOXES</button>
+        </div>
+    </div>
 
     <!-- Info Tooltip -->
     <div id="param-tooltip" class="hidden"></div>
