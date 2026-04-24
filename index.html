@@ -152,6 +152,24 @@
 
                 <!-- Evolution Panel -->
                 <div class="panel" id="panel-train">
+
+                    <div class="tool-group" id="autotrain-group" style="border:2px solid rgba(0,230,118,0.35); background:rgba(0,230,118,0.04); border-radius:6px; padding:10px;">
+                        <h3 style="color:#00e676; margin-bottom:8px;">AUTO TRAIN</h3>
+                        <div class="control-row" style="margin-bottom:6px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="autotrain-toggle"> Entrenamiento Continuo Automático
+                            </label>
+                        </div>
+                        <div id="autotrain-phase-box" style="display:none; padding:8px; background:rgba(0,0,0,0.3); border-radius:5px; margin-top:6px;">
+                            <div style="font-size:10px; color:#666; margin-bottom:3px; text-transform:uppercase; letter-spacing:0.05em;">Fase activa</div>
+                            <div id="autotrain-phase-name" style="font-size:15px; font-weight:bold; color:#00e676;">EXPLORACIÓN</div>
+                            <div id="autotrain-phase-detail" style="font-size:11px; color:#888; margin-top:2px;"></div>
+                        </div>
+                        <div style="font-size:10px; color:#555; margin-top:6px; line-height:1.5;">
+                            Gestiona automáticamente: Exploración → Curriculum → Vueltas → CMA-ES. Los controles manuales quedan disponibles para override.
+                        </div>
+                    </div>
+
                     <div class="tool-group">
                         <h3>Población</h3>
                         <div class="control-row"><label>Total <button class="info-btn" data-info="tpop">i</button> <span
@@ -174,11 +192,11 @@
                                 <span id="vtmutmin">0.05</span></label><input type="range" id="tmutmin" min="0.01"
                                 max="0.2" step="0.01" value="0.05"></div>
                         <div class="control-row"><label>Máxima <button class="info-btn" data-info="tmutmax">i</button>
-                                <span id="vtmutmax">0.45</span></label><input type="range" id="tmutmax" min="0.1"
-                                max="0.8" step="0.05" value="0.45"></div>
+                                <span id="vtmutmax">0.35</span></label><input type="range" id="tmutmax" min="0.1"
+                                max="0.8" step="0.05" value="0.35"></div>
                         <div class="control-row"><label>Gens estancado <button class="info-btn"
-                                    data-info="tstale">i</button> <span id="vtstale">3</span></label><input type="range"
-                                id="tstale" min="1" max="15" step="1" value="3"></div>
+                                    data-info="tstale">i</button> <span id="vtstale">5</span></label><input type="range"
+                                id="tstale" min="1" max="15" step="1" value="5"></div>
                     </div>
 
                     <div class="tool-group">
@@ -236,6 +254,16 @@
                             <div class="control-row">
                                 <label>Umbral por sector <span id="vcurr-thresh">60</span>%</label>
                                 <input type="range" id="curr-thresh" min="0.2" max="1" step="0.05" value="0.6">
+                            </div>
+                            <div class="control-row" style="margin-top:6px;">
+                                <label style="font-size:11px; color:#aaa; margin-bottom:4px; display:block;">Granularidad de sectores</label>
+                                <div style="display:flex; gap:4px;">
+                                    <button class="curr-zones-btn pill active" data-zones="24"  style="flex:1; font-size:11px; padding:4px 0;">1× (24)</button>
+                                    <button class="curr-zones-btn pill"        data-zones="48"  style="flex:1; font-size:11px; padding:4px 0;">2× (48)</button>
+                                    <button class="curr-zones-btn pill"        data-zones="96"  style="flex:1; font-size:11px; padding:4px 0;">4× (96)</button>
+                                    <button class="curr-zones-btn pill"        data-zones="192" style="flex:1; font-size:11px; padding:4px 0;">8× (192)</button>
+                                </div>
+                                <div style="font-size:10px; color:#888; margin-top:3px;" id="curr-zones-desc">Cada sector = 1/24 de pista</div>
                             </div>
 
                             <!-- Navegación manual de sectores -->

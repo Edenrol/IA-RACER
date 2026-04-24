@@ -609,7 +609,58 @@ function zoneClIndex(z, ZONES) {
 
 function drawCheckpoints(ctx, ZONES, bestCar) {
     var n = CL.length;
-    var goalZone = (typeof curriculumMode !== 'undefined' && curriculumMode) ? Math.min(curriculumSector, ZONES - 1) : -1;
+    var czones = (typeof CURRICULUM_ZONES !== 'undefined') ? CURRICULUM_ZONES : ZONES;
+    var cmode = (typeof curriculumMode !== 'undefined' && curriculumMode);
+    var cSector = (typeof curriculumSector !== 'undefined') ? curriculumSector : -1;
+    var hasMicro = cmode && czones > ZONES;
+
+    var ratio = czones / ZONES; // 1 para 1×, 2/4/8 para micro
+
+    // Dibujar micro-sectores cuando CURRICULUM_ZONES > 24
+    if (hasMicro) {
+        for (var s = 1; s < czones; s++) {
+            if (s % ratio === 0) continue; // coincide con zona regular, la dibujará el loop de abajo
+            var mci = zoneClIndex(s, czones);
+            var mcp = CL[mci];
+            var mcprev = CL[(mci - 1 + n) % n];
+            var mcnext = CL[(mci + 1) % n];
+            var mcdx = mcnext[0] - mcprev[0], mcdy = mcnext[1] - mcprev[1];
+            var mclen = Math.sqrt(mcdx * mcdx + mcdy * mcdy) || 1;
+            var mcnx = -mcdy / mclen, mcny = mcdx / mclen;
+            var isMGoal = (s === cSector);
+            var mchalf = isMGoal ? TW * 0.35 : TW * 0.12; // objetivo: más ancho; tick normal: pequeño
+            ctx.beginPath();
+            ctx.moveTo(mcp[0] + mcnx * mchalf, mcp[1] + mcny * mchalf);
+            ctx.lineTo(mcp[0] - mcnx * mchalf, mcp[1] - mcny * mchalf);
+            ctx.strokeStyle = isMGoal ? 'rgba(255, 152, 0, 0.95)' : 'rgba(180, 100, 255, 0.35)';
+            ctx.lineWidth = isMGoal ? 3 : 1 / view.zoom;
+            ctx.stroke();
+            if (isMGoal) {
+                ctx.beginPath();
+                ctx.arc(mcp[0], mcp[1], TW * 0.2, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 152, 0, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(255, 152, 0, 1)';
+                ctx.font = 'bold ' + (8 / view.zoom) + 'px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('★' + s, mcp[0] + mcnx * (mchalf + 7 / view.zoom), mcp[1] + mcny * (mchalf + 7 / view.zoom));
+            }
+        }
+    }
+
+    // goalZone en zona regular:
+    // - 1× mode: mapeo directo sector→zona
+    // - micro mode: solo si el sector objetivo coincide con una zona regular (s % ratio === 0)
+    var goalZone = -1;
+    if (cmode) {
+        if (!hasMicro) {
+            goalZone = Math.min(Math.floor(cSector / czones * ZONES), ZONES - 1);
+        } else if (cSector % ratio === 0) {
+            goalZone = Math.min(cSector / ratio, ZONES - 1);
+        }
+    }
     for (var z = 0; z < ZONES; z++) {
         var ci = zoneClIndex(z, ZONES);
         var cp = CL[ci];
@@ -902,7 +953,7 @@ document.getElementById('tstagconfirm').addEventListener('change', function () {
 window.updateCurriculumUI = function () {
     var sd = document.getElementById('curr-sector-display');
     var hd = document.getElementById('curr-hit-display');
-    if (sd) sd.textContent = curriculumMode ? (curriculumSector + ' / 23') : '—';
+    if (sd) sd.textContent = curriculumMode ? (curriculumSector + ' / ' + CURRICULUM_ZONES) : '—';
     if (hd) {
         if (curriculumMode && cars.length > 0) {
             var h = cars.filter(function (c) { return c.curriculumGoalHit; }).length;
@@ -918,7 +969,7 @@ window.updateCurriculumUI = function () {
     var prevBtn = document.getElementById('curr-sector-prev');
     var nextBtn = document.getElementById('curr-sector-next');
     if (prevBtn) prevBtn.disabled = !curriculumMode || curriculumSector <= 1;
-    if (nextBtn) nextBtn.disabled = !curriculumMode || curriculumSector >= 23;
+    if (nextBtn) nextBtn.disabled = !curriculumMode || curriculumSector >= CURRICULUM_ZONES;
 
     // Toggle acumulativo/aislado
     var cumulBtn = document.getElementById('curr-mode-cumul');
@@ -936,6 +987,88 @@ window.updateCurriculumUI = function () {
         }
     }
 };
+
+// Selector de granularidad de sectores
+document.querySelectorAll('.curr-zones-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var zones = parseInt(this.dataset.zones);
+        CURRICULUM_ZONES = zones;
+        // Actualizar UI activo
+        document.querySelectorAll('.curr-zones-btn').forEach(function (b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        // Descripción
+        var desc = document.getElementById('curr-zones-desc');
+        if (desc) desc.textContent = 'Cada sector = 1/' + zones + ' de pista (~' + (100 / zones).toFixed(1) + '%)';
+        // Resetear curriculum si está activo
+        if (curriculumMode) {
+            curriculumSector = 1;
+            if (typeof updateCurriculumUI === 'function') updateCurriculumUI();
+        }
+    });
+});
+
+// Auto-train UI
+window.updateAutoTrainUI = function () {
+    var box = document.getElementById('autotrain-phase-box');
+    var nameEl = document.getElementById('autotrain-phase-name');
+    var detailEl = document.getElementById('autotrain-phase-detail');
+    if (!box || !nameEl || !detailEl) return;
+    if (!autoTrain.active) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    nameEl.style.color = autoTrain.phaseColors[autoTrain.phase] || '#00e676';
+    nameEl.textContent = autoTrain.phaseNames[autoTrain.phase];
+    var stuckInfo = '';
+    if (autoTrain.phase === 1 && autoTrain.sectorTotalStuck > 0) {
+        var stage = autoTrain.sectorTotalStuck >= 55 ? 'etapa 4' :
+                    autoTrain.sectorTotalStuck >= 35 ? 'etapa 3' :
+                    autoTrain.sectorTotalStuck >= 18 ? 'etapa 2' :
+                    autoTrain.sectorTotalStuck >= 5  ? 'etapa 1' : '';
+        stuckInfo = ' · atascado ' + autoTrain.sectorTotalStuck + ' gens' + (stage ? ' (' + stage + ')' : '');
+    }
+    var cmaeSigStr = (typeof cmaes !== 'undefined' && cmaes.active) ? ' · σ=' + cmaes.sigma.toFixed(4) : '';
+    var details = [
+        'CMA-ES frío · explorando conducción básica' + cmaeSigStr,
+        'Spawn distribuido · CMA-ES aprende todo el track' + cmaeSigStr,
+        'CMA-ES vuelta completa · ' + autoTrain.lapReadyGens + '/2 gens ≥15%' + cmaeSigStr,
+        'CMA-ES optimizando tiempo de vuelta' + cmaeSigStr
+    ];
+    detailEl.textContent = details[autoTrain.phase] || '';
+    // Sincronizar checkboxes manuales con el estado real
+    var distToggle = document.getElementById('distributed-toggle');
+    var currToggle = document.getElementById('curriculum-toggle');
+    var cmaesChk = document.getElementById('cmaes-toggle');
+    if (distToggle) distToggle.checked = typeof distributedSpawnMode !== 'undefined' && distributedSpawnMode;
+    if (currToggle) currToggle.checked = typeof curriculumMode !== 'undefined' && curriculumMode;
+    if (cmaesChk) cmaesChk.checked = typeof cmaes !== 'undefined' && cmaes.active;
+};
+
+document.getElementById('autotrain-toggle').addEventListener('change', function () {
+    autoTrain.active = this.checked;
+    if (autoTrain.active) {
+        // Determinar fase de entrada según estado actual
+        var startPhase = (typeof gbl !== 'undefined' && gbl !== Infinity) ? 3 : 0;
+        autoTrain.phase = startPhase;
+        autoTrain.lastPhaseGen = typeof gen !== 'undefined' ? gen : 0;
+        autoTrain.sectorStuckGens = 0;
+        autoTrain.sectorTotalStuck = 0;
+        autoTrain.prevSector = -1;
+        autoTrain.lapReadyGens = 0;
+        autoTrain.origThresh = typeof curriculumThresh !== 'undefined' ? curriculumThresh : 0.6;
+        // Limpiar modos manuales residuales para que auto-train tome control limpio
+        if (typeof distributedSpawnMode !== 'undefined') distributedSpawnMode = false;
+        if (typeof curriculumMode !== 'undefined' && curriculumMode) {
+            curriculumMode = false;
+            if (typeof updateCurriculumUI === 'function') updateCurriculumUI();
+        }
+        if (typeof cmaes !== 'undefined' && cmaes.active && startPhase !== 3) {
+            cmaes.active = false;
+        }
+    } else {
+        var box = document.getElementById('autotrain-phase-box');
+        if (box) box.style.display = 'none';
+    }
+    updateAutoTrainUI();
+});
 
 document.getElementById('cmaes-toggle').addEventListener('change', function () {
     cmaesToggle();
@@ -984,7 +1117,7 @@ document.getElementById('curr-sector-prev').addEventListener('click', function (
 });
 
 document.getElementById('curr-sector-next').addEventListener('click', function () {
-    if (curriculumSector < 23) { curriculumSector++; updateCurriculumUI(); }
+    if (curriculumSector < CURRICULUM_ZONES) { curriculumSector++; updateCurriculumUI(); }
 });
 
 document.getElementById('curr-mode-cumul').addEventListener('click', function () {
@@ -1323,9 +1456,10 @@ function drawCanvasHUD(ctx) {
 
     // Curriculum mode overlay badge
     if (typeof curriculumMode !== 'undefined' && curriculumMode) {
-        var goalZ = Math.min(curriculumSector, 23);
         var hitC = cars.filter(function (c) { return c.curriculumGoalHit; }).length;
         var hitPct = cars.length > 0 ? hitC / cars.length : 0;
+        var stuckLabel = (typeof autoTrain !== 'undefined' && autoTrain.active && autoTrain.sectorTotalStuck > 0)
+            ? ' [atascado ' + autoTrain.sectorTotalStuck + ']' : '';
         ctx.save();
         ctx.translate(20, CH - 145);
         ctx.fillStyle = 'rgba(10,10,12,0.92)';
@@ -1334,7 +1468,7 @@ function drawCanvasHUD(ctx) {
         ctx.fillStyle = '#ff9800';
         ctx.font = 'bold 10px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('CURRICULUM — Sector ' + curriculumSector + ' / 23', 8, 14);
+        ctx.fillText('CURRICULUM — Sector ' + curriculumSector + ' / 23' + stuckLabel, 8, 14);
         // progress bar
         ctx.fillStyle = 'rgba(255,152,0,0.15)';
         ctx.fillRect(0, 0, 260, 20);

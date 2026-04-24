@@ -37,21 +37,199 @@ var phys = {
 };
 var train = {
     pop: 28, elite: 3, inject: 0.2,
-    mutBase: 0.15, mutMin: 0.05, mutMax: 0.45, stale: 3,
+    mutBase: 0.15, mutMin: 0.05, mutMax: 0.35, stale: 5,
     ftime: 0.7, fpen: 0.5, fbonus: 8000,
     lapStart: 1, lapMax: 8, lapThresh: 0.5, lapValid: 0.85,
     safety: 2.5, stagLimit: 50, stagConfirm: true
 };
 var isEditing = true, sctx = null, actF = new Set(['speed', 'laps', 'bl', 'fit']);
+
+// ==================== AUTO TRAIN ====================
+var autoTrain = {
+    active: false,
+    phase: 0,  // 0=EXPLORE, 1=CURRICULUM, 2=LAPS, 3=CMAES
+    phaseNames: ['EXPLORACIÓN', 'COBERTURA', 'VUELTAS', 'OPTIMIZAR'],
+    phaseColors: ['#4fc3f7', '#7c4dff', '#00e676', '#ce93d8'],
+    sectorStuckGens: 0,   // gens seguidas con hitRate<5% (para switch aislado)
+    sectorTotalStuck: 0,  // gens totales atascado en sector actual (no se resetea)
+    prevSector: -1,       // detecta cuándo avanza el sector
+    origThresh: 0.6,      // umbral original del usuario (para restaurar al avanzar sector)
+    lapReadyGens: 0,
+    lastPhaseGen: 0
+};
+
+function autoTrainSetPhase(phase) {
+    autoTrain.phase = phase;
+    autoTrain.lastPhaseGen = gen;
+    autoTrain.sectorStuckGens = 0;
+    autoTrain.sectorTotalStuck = 0;
+    autoTrain.prevSector = -1;
+    autoTrain.lapReadyGens = 0;
+    staleCount = 0;
+    currentMut = train.mutBase;
+    prevBestFitness = -Infinity;
+    if (typeof updateAutoTrainUI === 'function') updateAutoTrainUI();
+}
+
+function autoTrainTick(finRate, hitRate) {
+    if (!autoTrain.active) return;
+    var gensInPhase = gen - autoTrain.lastPhaseGen;
+
+    if (autoTrain.phase === 0) {
+        // EXPLORE: CMA-ES cold start — aprende conducción básica eficientemente.
+        // Siempre iniciar desde red ALEATORIA con sigma=0.5 (exploración amplia).
+        // NO usar cmaesToggle: si hay autos disponibles usaría sigma=0.15, demasiado estrecho.
+        distributedSpawnMode = false;
+        curriculumMode = false;
+        if (!cmaes.active) {
+            cmaesInit(new Net(), 0.5);
+        }
+        if (gbl !== Infinity) {
+            // Primera vuelta durante exploración → Phase 3 (re-seed CMA-ES desde bestLapNet)
+            if (bestLapNet) {
+                var reseeded = new Net(JSON.parse(JSON.stringify(bestLapNet)));
+                cmaesInit(reseeded, 0.15);
+            }
+            autoTrainSetPhase(3);
+            return;
+        }
+        // Transición por tiempo fijo: 30 gens = ~690 evaluaciones.
+        // Para n=563 pesos con lambda≈23: necesita ~25 gens mínimo. 30 da margen suficiente.
+        // NO esperar estancamiento: si CMA-ES mejora, lastDistRecordGen nunca estagna y fase 0 no terminaría.
+        if (gensInPhase >= 30) {
+            if (cmaes.mean && cmaes.templateW) {
+                var cmaesNet = netUnflatten(cmaes.mean, cmaes.templateW);
+                bestDistNet = JSON.parse(JSON.stringify(cmaesNet));
+                // Sembrar Phase 1 explícitamente desde la media CMA-ES, no desde elites aleatorias
+                fineTuneProfile = { net: JSON.parse(JSON.stringify(cmaesNet)) };
+                fineTuneActive = true;
+                currentMut = train.mutBase * 0.5;
+            }
+            cmaes.active = false;
+            autoTrainSetPhase(1);
+        }
+    }
+    else if (autoTrain.phase === 1) {
+        // COBERTURA: distributed spawn CMA-ES.
+        // Todos los autos spawnean distribuidos por toda la pista cada generación.
+        // CMA-ES aprende una política que funciona desde CUALQUIER posición del track.
+        // Sin forgetting, sin distribution shift. Mejor transferencia a vuelta completa.
+        if (!distributedSpawnMode) {
+            distributedSpawnMode = true;
+            curriculumMode = false;
+            if (typeof updateCurriculumUI === 'function') updateCurriculumUI();
+            var p1Seed = bestDistNet
+                ? new Net(JSON.parse(JSON.stringify(bestDistNet)))
+                : new Net();
+            cmaesInit(p1Seed, 0.3);
+        }
+
+        // Primera vuelta → ir directo a Phase 3 (optimizar tiempo)
+        if (gbl !== Infinity) {
+            distributedSpawnMode = false;
+            cmaes.active = false;
+            autoTrainSetPhase(3);
+            return;
+        }
+
+        // Si CMA-ES colapsó (sigma muy pequeño): reiniciar con sigma mayor desde mejor red
+        if (cmaes.active && cmaes.sigma < 0.025) {
+            var recoverW = (cmaes.mean && cmaes.templateW)
+                ? netUnflatten(cmaes.mean, cmaes.templateW)
+                : (bestDistNet ? JSON.parse(JSON.stringify(bestDistNet)) : null);
+            cmaesInit(recoverW ? new Net(recoverW) : new Net(), 0.35);
+        }
+
+        // Cada 30 gens sin vuelta: reinicio amplio para escapar óptimos locales
+        if (gensInPhase > 0 && gensInPhase % 30 === 0) {
+            // netUnflatten devuelve pesos crudos — guardar en bestDistNet y wrappear en Net para cmaesInit
+            var expandW = (cmaes.mean && cmaes.templateW)
+                ? netUnflatten(cmaes.mean, cmaes.templateW)
+                : (bestDistNet ? JSON.parse(JSON.stringify(bestDistNet)) : null);
+            if (expandW) bestDistNet = JSON.parse(JSON.stringify(expandW));
+            cmaesInit(expandW ? new Net(expandW) : new Net(), Math.min(0.6, cmaes.sigma * 2.5));
+        }
+
+        // Después de 90 gens → Phase 2 (intentar vuelta desde zona 0)
+        if (gensInPhase >= 90) {
+            distributedSpawnMode = false;
+            if (cmaes.mean && cmaes.templateW) {
+                bestDistNet = JSON.parse(JSON.stringify(netUnflatten(cmaes.mean, cmaes.templateW)));
+            }
+            cmaes.active = false;
+            autoTrainSetPhase(2);
+        }
+    }
+    else if (autoTrain.phase === 2) {
+        // VUELTAS: CMA-ES desde spawn zona 0, intenta completar la vuelta entera.
+        // Llega aquí con una red que ya sabe manejar cualquier parte del track (Phase 1).
+        if (curriculumMode) { curriculumMode = false; if (typeof updateCurriculumUI === 'function') updateCurriculumUI(); }
+        distributedSpawnMode = false;
+        if (!cmaes.active) {
+            var p2Seed = bestDistNet
+                ? new Net(JSON.parse(JSON.stringify(bestDistNet)))
+                : (bestLapNet ? new Net(JSON.parse(JSON.stringify(bestLapNet))) : new Net());
+            cmaesInit(p2Seed, 0.2);
+        }
+        if (gbl !== Infinity) {
+            // Primera vuelta conseguida → Phase 3 (optimizar tiempo)
+            if (finRate >= 0.15) {
+                autoTrain.lapReadyGens++;
+                if (autoTrain.lapReadyGens >= 2) { autoTrainSetPhase(3); }
+            } else {
+                autoTrain.lapReadyGens = Math.max(0, autoTrain.lapReadyGens - 1);
+            }
+        } else {
+            // Sin vuelta: escalar sigma progresivamente para ampliar la búsqueda
+            if (gensInPhase === 20 && cmaes.active) {
+                cmaes.sigma = Math.max(cmaes.sigma, 0.3);
+            } else if (gensInPhase === 45) {
+                var p2Fallback = bestDistNet
+                    ? new Net(JSON.parse(JSON.stringify(bestDistNet)))
+                    : new Net();
+                cmaesInit(p2Fallback, 0.5);
+            } else if (gensInPhase === 70) {
+                // Último intento: reinicio amplio desde mejor red conocida
+                var p2Last = bestLapNet || bestDistNet;
+                cmaesInit(p2Last ? new Net(JSON.parse(JSON.stringify(p2Last))) : new Net(), 0.7);
+            }
+        }
+    }
+    else if (autoTrain.phase === 3) {
+        // CMA-ES: optimización final de tiempo
+        if (curriculumMode) { curriculumMode = false; if (typeof updateCurriculumUI === 'function') updateCurriculumUI(); }
+        distributedSpawnMode = false;
+        // Activar CMA-ES: funciona con bestLapNet o con cold start desde red aleatoria
+        if (!cmaes.active) {
+            if (typeof cmaesToggle === 'function') cmaesToggle();
+        }
+        // Totalmente convergido → volver a GA para inyectar diversidad
+        if (cmaes.active && cmaes.sigma < 0.002) {
+            cmaes.active = false;
+            autoTrain.lapReadyGens = 0;
+            autoTrainSetPhase(2);
+        }
+    }
+
+    if (typeof updateAutoTrainUI === 'function') updateAutoTrainUI();
+}
 var fineTuneProfile = null;
 var fineTuneActive = false; // FIX #10: flag separado de gen===1
 var isCompareMode = false;
 
 // ==================== CURRICULUM LEARNING ====================
 var curriculumMode = false;
-var curriculumSector = 1;   // goal zone (1-23), cars must reach this zone
-var curriculumThresh = 0.6; // fraction of cars that must hit goal to advance sector
+var curriculumSector = 1;   // sector objetivo actual (1..CURRICULUM_ZONES)
+var curriculumThresh = 0.6; // fracción de autos que deben llegar al goal para avanzar
+// Granularidad del curriculum: 24=1x, 48=2x, 96=4x, 192=8x.
+// Más sectores = cada paso es más corto y fácil. Curvas complejas se aprenden en varios micro-pasos.
+var CURRICULUM_ZONES = 24;
 var bestCurriculumNet = null; // best net that ever reached the curriculum goal
+// Estado real de aproximación a cada zona: {x, y, ang, spd}
+// Guardado cuando un auto pasa la zona en modo cumulativo (no aislado).
+// Usado en spawn aislado para eliminar covariate shift: el auto entrena el sector
+// con la misma velocidad/ángulo que tendría llegando desde el inicio de la pista.
+var sectorApproachStates = {};
 
 // ==================== DISTRIBUTED SPAWN ====================
 var distributedSpawnMode = false;
@@ -61,8 +239,8 @@ var finishTimer = -1;
 var isRaceMode = false;
 var useFuel = true;
 
-// INPUT COUNT: 7 sensores + spd + slip + 3 specs fisica + dt + eng + 3 lookahead + relHead + latPos + accelDelta + sin/cos checkpointDir = 22
-var NET_INPUT_SIZE = 22;
+// INPUT COUNT: 7 sensores + spd + slip + 3 specs fisica + dt + eng + 3 lookahead + relHead + latPos + accelDelta + sin/cos checkpointDir + 2 prev_action = 24
+var NET_INPUT_SIZE = 24;
 
 // Misma lógica que zoneClIndex en script.js pero disponible en ai.js
 function zoneClIndexAI(z, ZONES) {
@@ -114,12 +292,29 @@ function checkCross(x, y, px, py) {
     return segi(x, y, px, py, startLine.ax, startLine.ay, startLine.bx, startLine.by) !== null;
 }
 
+function pointInPoly(px, py, poly) {
+    if (!poly || poly.length < 3) return false;
+    var inside = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        var xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+        if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi))
+            inside = !inside;
+    }
+    return inside;
+}
+
+function isOnTrack(px, py) {
+    if (!OUT || !INN || OUT.length < 3 || INN.length < 3) return true;
+    return pointInPoly(px, py, OUT) && !pointInPoly(px, py, INN);
+}
+
 // ==================== NEURAL NETWORK ====================
-// FIX #1: Arquitectura 20→32→16→3 (2 capas ocultas)
+// Arquitectura 24→16→8→3: suficiente para conducción reactiva, converge 2.5x más rápido en CMA-ES
+// (563 pesos vs 1379 anterior — Sep-CMA-ES necesita O(n) evaluaciones: 24 vs 57 gens mínimos)
 function Net(w) { this.w = w || this.rnd(); }
 
 Net.prototype.rnd = function () {
-    var H1 = 32, H2 = 16;
+    var H1 = 16, H2 = 8;
     var w = { l1: [], b1: [], l2: [], b2: [], l3: [], b3: [] };
 
     // Capa 1: NET_INPUT_SIZE → H1
@@ -220,6 +415,9 @@ function Car(net, id, col, customPhys, profileName, tuning) {
     this.thrOut = 0;
     this.brkOut = 0;
     this.msens = 1;
+    this.prevAction = [0, 0]; // [accelBrake, steer] del frame anterior
+    this.steerJerkAccum = 0; // suma de |delta steer| por frame — penaliza conducción errática
+    this.wallProxAccum = 0;  // suma de proximidad a paredes — penaliza rozar muros
     this._fitness = 0;
     this.ZONES = 24;
     this.zonesHit = new Array(this.ZONES).fill(false);
@@ -240,11 +438,12 @@ Car.prototype.calcFitness = function () {
     if (curriculumMode) {
         // Fitness cuadrático: zonas más cercanas al goal valen exponencialmente más
         // Esto crea un gradiente fuerte que "tira" a los autos hacia el objetivo
-        var goal = Math.min(curriculumSector, this.ZONES - 1);
+        // Mapear sector curriculum a zona interna del auto (0..ZONES-1)
+        var goalCarZone = Math.min(Math.floor(curriculumSector / CURRICULUM_ZONES * this.ZONES), this.ZONES - 1);
         var proximityScore = 0;
-        for (var z = 0; z <= goal; z++) {
+        for (var z = 0; z <= goalCarZone; z++) {
             if (this.zonesHit[z]) {
-                var w = Math.pow((z + 1) / (goal + 1), 2); // 0..1 cuadrático
+                var w = Math.pow((z + 1) / (goalCarZone + 1), 2); // 0..1 cuadrático
                 proximityScore += w * 4000;
             }
         }
@@ -255,17 +454,29 @@ Car.prototype.calcFitness = function () {
         return proximityScore + goalBonus - timePenalty - reversePenalty;
     }
     var lapBonus = this.laps * train.fbonus;
-    var timePenalty = this.fc * train.fpen;
+    // En exploración: penalidad de tiempo casi nula para no castigar aprendizaje lento.
+    // En modo vuelta: presión completa para optimizar velocidad.
+    var exploring = gbl === Infinity;
+    var timePenalty = this.fc * (exploring ? train.fpen * 0.05 : train.fpen);
     var distBonus = this.totalD * (1 - train.ftime);
     // Bonus inversamente proporcional al tiempo: spread enorme entre rápidos y lentos
-    // 1000fr→8000pts, 2000fr→4000pts, 4000fr→2000pts — presión de selección agresiva
     var timeBonus = this.finished
         ? (8000000 / (this.finishFrame + 1)) + train.fbonus * currentLaps
         : 0;
     // Carros que terminan: slip admisible (líneas de carrera agresivas son más rápidas)
     var stabilityFactor = (this.totalSlip / (this.fc || 1)) * (this.finished ? 5 : 50);
     var reversePenalty = this.reverseFrames * 3;
-    return lapBonus + distBonus + timeBonus - timePenalty - stabilityFactor - reversePenalty;
+    // En exploración: bonus de cobertura mucho mayor para incentivar visitar zonas nuevas.
+    // En modo vuelta: bonus pequeño (la presión es sobre el tiempo de vuelta).
+    var zonesHitCount = 0;
+    for (var z = 0; z < this.ZONES; z++) if (this.zonesHit[z]) zonesHitCount++;
+    var coverageBonus = zonesHitCount * (train.fbonus * (exploring ? 0.15 : 0.025));
+    // Penalidad de suavidad: driving errático (alto jerk de volante) penalizado
+    // Normalizado por frames para que no crezca con el tiempo de vida
+    var smoothPenalty = ((this.steerJerkAccum || 0) / (this.fc || 1)) * (exploring ? 150 : 350);
+    // Penalidad de proximidad a paredes: trayectorias que rozan muros penalizadas
+    var wallPenalty = ((this.wallProxAccum || 0) / (this.fc || 1)) * (exploring ? 80 : 180);
+    return lapBonus + distBonus + timeBonus + coverageBonus - timePenalty - stabilityFactor - reversePenalty - smoothPenalty - wallPenalty;
 };
 
 // FIX #12: solo una definicion de lapCoverageOk
@@ -294,6 +505,10 @@ Car.prototype.upd = function () {
     var minW = sens.reduce(function (a, b) { return a.dist < b.dist ? a : b; }).dist;
 
     if (this.fc > 30 && minW < 4.0) { this.alive = false; this._fitness = this.calcFitness(); return; }
+
+    // Acumular proximidad continua a paredes (penaliza trayectorias que rozan muros)
+    var wpThresh = SL * 0.15;
+    if (minW < wpThresh) this.wallProxAccum += (wpThresh - minW) / wpThresh;
 
     this.sens = sens;
     this.msens = minW / SL;
@@ -386,7 +601,7 @@ Car.prototype.upd = function () {
             ? Math.floor((clDist[self.prevIdx] / clTotalLen) * self.ZONES)
             : Math.floor((self.prevIdx / n) * self.ZONES);
         var targetZone = curriculumMode
-            ? Math.min(curriculumSector, self.ZONES - 1)
+            ? Math.min(Math.floor(curriculumSector / CURRICULUM_ZONES * self.ZONES), self.ZONES - 1)
             : (curZone + 1) % self.ZONES;
         var tIdx = zoneClIndexAI(targetZone, self.ZONES);
         var tPt = CL[tIdx];
@@ -405,6 +620,10 @@ Car.prototype.upd = function () {
         for (var k = 0; k < 9; k++) inp.push(0);
     }
 
+    // 22-23: acciones del frame anterior — da contexto temporal para maniobras encadenadas
+    inp.push(this.prevAction[0]); // prev accelBrake [-1,1]
+    inp.push(this.prevAction[1]); // prev steer [-1,1]
+
     // guardar velocidad anterior para delta
     this.prevSpd = this.spd;
 
@@ -419,6 +638,11 @@ Car.prototype.upd = function () {
     var brk = Math.max(0, -accelBrake);  // 0 a 1 (solo cuando negativo)
     this.thrOut = thr;
     this.brkOut = brk;
+    var prevSteerOut = this.prevAction[1];
+    this.prevAction[0] = out[0];
+    this.prevAction[1] = out[1];
+    // Acumular jerk de dirección: penaliza cambios bruscos de volante frame a frame
+    this.steerJerkAccum += Math.abs(out[1] - prevSteerOut);
 
     // ==================== FISICA ====================
     if (brk > 0.1 && this.spd > 0.5) {
@@ -485,12 +709,9 @@ Car.prototype.upd = function () {
         }
     }
 
-    // Off-track detection
-    if (loaded && CL.length > 0 && CL[idx]) {
-        var dx = this.x - CL[idx][0], dy = this.y - CL[idx][1];
-        var distSq = dx * dx + dy * dy;
-        var limit = (TW / 2) * (train.safety || 2.0);
-        if (distSq > limit * limit) { this.alive = false; this._fitness = this.calcFitness(); return; }
+    // Off-track detection using actual track polygon geometry
+    if (loaded && OUT && OUT.length > 2 && !isOnTrack(this.x, this.y)) {
+        this.alive = false; this._fitness = this.calcFitness(); return;
     }
 
     n = CL.length;
@@ -523,6 +744,11 @@ Car.prototype.upd = function () {
     if (!this.zonesHit[zone]) {
         this.zonesHit[zone] = true;
         this.lastZoneFrame = this.fc;
+        // Guardar estado de aproximación real solo en modo cumulativo (no aislado y no distributed).
+        // En modo aislado el auto arranca desde cero — ese estado NO refleja la llegada real al sector.
+        if (!curriculumIsolated && !distributedSpawnMode) {
+            sectorApproachStates[zone] = { x: this.x, y: this.y, ang: this.ang, spd: this.spd };
+        }
     }
 
     // FIX #5: zone timeout — eliminar carros atascados entre zonas más rápido
@@ -532,10 +758,16 @@ Car.prototype.upd = function () {
         return;
     }
 
-    // Curriculum mode: detect goal zone reached
-    if (curriculumMode) {
-        var goalZone = Math.min(curriculumSector, this.ZONES - 1);
-        if (!this.curriculumGoalHit && this.zonesHit[goalZone]) {
+    // Curriculum mode: detectar llegada al goal usando distancia real del track.
+    // Funciona con cualquier valor de CURRICULUM_ZONES, no depende de la grilla de 24 zonas.
+    if (curriculumMode && !this.curriculumGoalHit) {
+        var carDist = (clTotalLen > 0 && clDist.length === n)
+            ? clDist[idx]
+            : (idx / n) * (clTotalLen || n);
+        // Cap at CURRICULUM_ZONES-1 to avoid requesting 100% track coverage
+        // (clDist never reaches clTotalLen; last sector auto-passes after the previous one)
+        var goalDist = (Math.min(curriculumSector, CURRICULUM_ZONES - 1) / CURRICULUM_ZONES) * (clTotalLen || n);
+        if (carDist >= goalDist) {
             this.curriculumGoalHit = true;
         }
     }
@@ -686,7 +918,9 @@ function netUnflatten(v, templateW) {
 function cmaesInit(seedNet, initSigma) {
     var flat = netFlatten(seedNet.w);
     var n = flat.length;
-    var lambda = train.pop;
+    // Lambda óptimo para CMA-ES: fórmula estándar independiente del tamaño de población del GA.
+    // Siempre par (para muestreo antitético), mínimo 10, máximo train.pop*2.
+    var lambda = Math.max(10, Math.floor((4 + Math.floor(3 * Math.log(n))) / 2) * 2);
     var mu = Math.floor(lambda / 2);
 
     // Pesos logarítmicos: los mejores candidatos pesan exponencialmente más
@@ -720,15 +954,28 @@ function cmaesInit(seedNet, initSigma) {
 
 function cmaesGenPop() {
     var n = cmaes.n, zs = [], xs = [], nets = [];
-    for (var k = 0; k < cmaes.lambda; k++) {
+    var half = Math.floor(cmaes.lambda / 2);
+    // Muestreo antitético: genera pares (+z, -z) para cubrir el espacio simétricamente.
+    // Reduce la varianza del estimador de gradiente a la mitad con el mismo presupuesto.
+    for (var k = 0; k < half; k++) {
+        var z = [];
+        for (var i = 0; i < n; i++) z.push(gaussRandom());
+        var sqrtD = cmaes.D.map(function (d) { return Math.sqrt(Math.max(1e-10, d)); });
+        var xPos = z.map(function (zi, i) { return cmaes.mean[i] + cmaes.sigma * sqrtD[i] * zi; });
+        var zNeg = z.map(function (zi) { return -zi; });
+        var xNeg = zNeg.map(function (zi, i) { return cmaes.mean[i] + cmaes.sigma * sqrtD[i] * zi; });
+        zs.push(z);    xs.push(xPos); nets.push(new Net(netUnflatten(xPos, cmaes.templateW)));
+        zs.push(zNeg); xs.push(xNeg); nets.push(new Net(netUnflatten(xNeg, cmaes.templateW)));
+    }
+    // Si lambda es impar, agregar una muestra extra
+    if (cmaes.lambda % 2 === 1) {
         var z = [], x = [];
         for (var i = 0; i < n; i++) {
             var zi = gaussRandom();
             z.push(zi);
             x.push(cmaes.mean[i] + cmaes.sigma * Math.sqrt(Math.max(1e-10, cmaes.D[i])) * zi);
         }
-        zs.push(z); xs.push(x);
-        nets.push(new Net(netUnflatten(x, cmaes.templateW)));
+        zs.push(z); xs.push(x); nets.push(new Net(netUnflatten(x, cmaes.templateW)));
     }
     cmaes.zs = zs; cmaes.xs = xs;
     return nets;
@@ -804,13 +1051,9 @@ function cmaesToggle() {
         var best = cars.slice().sort(function (a, b) { return b._fitness - a._fitness; })[0];
         seedNet = best.net.clone();
     }
-    if (!seedNet) {
-        alert('No hay red entrenada disponible. Entrena al menos una generación primero.');
-        var el = document.getElementById('cmaes-toggle');
-        if (el) el.checked = false;
-        return;
-    }
-    cmaesInit(seedNet, 0.15);
+    var coldStart = !seedNet;
+    if (coldStart) seedNet = new Net(); // exploración desde red aleatoria con sigma alto
+    cmaesInit(seedNet, coldStart ? 0.5 : 0.15);
     var info = document.getElementById('info-box');
     if (info) info.innerHTML += '<br><span style="color:#00e676">CMA-ES activado — n=' + cmaes.n + ' dims, σ=' + cmaes.sigma.toFixed(3) + '</span>';
 }
@@ -819,6 +1062,7 @@ function cmaesToggle() {
 function resetTraining() {
     gen = 0; gbl = Infinity; bestDistFound = 0; bestDistNet = null; cars = []; top3ids = new Set();
     lastRecordGen = 0; lastDistRecordGen = 0;
+    sectorApproachStates = {};
     currentLaps = train.lapStart; currentMut = train.mutBase;
     prevBestFitness = -Infinity; staleCount = 0;
     genHistory = [];
@@ -853,7 +1097,7 @@ function selectTop3(carList) {
         finished.sort(function (a, b) { return a.finishFrame - b.finishFrame; });
         return { mode: 'mixto', selected: finished.concat(rest).slice(0, 3) };
     }
-    return { mode: 'distancia', selected: carList.slice().sort(function (a, b) { return b.totalD - a.totalD; }).slice(0, 3) };
+    return { mode: 'distancia', selected: carList.slice().sort(function (a, b) { return b._fitness - a._fitness; }).slice(0, 3) };
 }
 
 function newGen() {
@@ -894,7 +1138,7 @@ function newGen() {
         } else {
             staleCount++;
             if (staleCount >= train.stale) {
-                currentMut = Math.min(train.mutMax, currentMut * 1.4);
+                currentMut = Math.min(train.mutMax, currentMut * 1.2);
                 staleCount = 0;
             }
         }
@@ -909,29 +1153,30 @@ function newGen() {
             if (typeof createProfileFromCar === 'function') createProfileFromCar(genBestExplorer, false, "EXPLORADOR (GEN " + gen + ")");
         }
 
-        // Stagnation detection fase exploratoria
-        if (gbl === Infinity && bestDistNet && gen - lastDistRecordGen >= train.stagLimit) {
-            var doReset = !train.stagConfirm || confirm("ESTANCAMIENTO: nadie completo una vuelta en " + train.stagLimit + " gens. Reiniciar desde mejor explorador?");
-            if (doReset) {
-                lastDistRecordGen = gen;
-                fineTuneProfile = { net: JSON.parse(JSON.stringify(bestDistNet)) };
-                fineTuneActive = true; // FIX #10
-                gen = 0; staleCount = 0; currentMut = train.mutBase;
-            } else {
-                lastDistRecordGen = gen;
+        // Stagnation detection (autoTrain gestiona las transiciones automáticamente)
+        if (!autoTrain.active) {
+            if (gbl === Infinity && bestDistNet && gen - lastDistRecordGen >= train.stagLimit) {
+                var doReset = !train.stagConfirm || confirm("ESTANCAMIENTO: nadie completo una vuelta en " + train.stagLimit + " gens. Reiniciar desde mejor explorador?");
+                if (doReset) {
+                    lastDistRecordGen = gen;
+                    fineTuneProfile = { net: JSON.parse(JSON.stringify(bestDistNet)) };
+                    fineTuneActive = true;
+                    gen = 0; staleCount = 0; currentMut = train.mutBase;
+                } else {
+                    lastDistRecordGen = gen;
+                }
             }
-        }
 
-        // Stagnation detection fase de vueltas
-        if (gbl !== Infinity && gen - lastRecordGen >= train.stagLimit && bestLapNet) {
-            var doReset2 = !train.stagConfirm || confirm("RECORD ESTANCADO " + train.stagLimit + " gens. Recuperar desde mejor cerebro historico?");
-            if (doReset2) {
-                lastRecordGen = gen;
-                fineTuneProfile = { net: JSON.parse(JSON.stringify(bestLapNet)) };
-                fineTuneActive = true; // FIX #10
-                gen = 0; staleCount = 0; currentMut = train.mutBase;
-            } else {
-                lastRecordGen = gen;
+            if (gbl !== Infinity && gen - lastRecordGen >= train.stagLimit && bestLapNet) {
+                var doReset2 = !train.stagConfirm || confirm("RECORD ESTANCADO " + train.stagLimit + " gens. Recuperar desde mejor cerebro historico?");
+                if (doReset2) {
+                    lastRecordGen = gen;
+                    fineTuneProfile = { net: JSON.parse(JSON.stringify(bestLapNet)) };
+                    fineTuneActive = true;
+                    gen = 0; staleCount = 0; currentMut = train.mutBase;
+                } else {
+                    lastRecordGen = gen;
+                }
             }
         }
 
@@ -977,7 +1222,7 @@ function newGen() {
                     currentMut = train.mutBase;
                 }
 
-                if (curriculumSector > 23) {
+                if (curriculumSector > CURRICULUM_ZONES) {
                     curriculumMode = false;
                     curriculumSector = 1;
                     var info = document.getElementById('info-box');
@@ -1005,9 +1250,8 @@ function newGen() {
                 return c.finished ? (c.finishFrame / 60).toFixed(2) + 's' : 'fit:' + Math.round(c._fitness);
             }).join(' / ');
             if (curriculumMode) {
-                var goalZ = Math.min(curriculumSector, 23);
                 var hitC = cars.filter(function (c) { return c.curriculumGoalHit; }).length;
-                info.innerHTML = 'Gen <span>' + gen + '</span> | Mut: <span>' + currentMut.toFixed(3) + '</span> | <span style="color:#4fc3f7">CURRICULUM Sector ' + curriculumSector + '/23</span><br>Alcanzaron meta: <span style="color:#00e676">' + hitC + '/' + cars.length + '</span> (' + Math.round(hitC / cars.length * 100) + '%) | umbral: ' + Math.round(curriculumThresh * 100) + '%';
+                info.innerHTML = 'Gen <span>' + gen + '</span> | Mut: <span>' + currentMut.toFixed(3) + '</span> | <span style="color:#4fc3f7">CURRICULUM Sector ' + curriculumSector + '/' + CURRICULUM_ZONES + '</span><br>Alcanzaron meta: <span style="color:#00e676">' + hitC + '/' + cars.length + '</span> (' + Math.round(hitC / cars.length * 100) + '%) | umbral: ' + Math.round(curriculumThresh * 100) + '%';
             } else {
                 info.innerHTML = 'Gen <span>' + gen + '</span> | Mut: <span>' + currentMut.toFixed(3) + '</span> | Obj: <span>' + currentLaps + 'v</span><br>Sel: <span>' + selStr + '</span>';
             }
@@ -1025,6 +1269,13 @@ function newGen() {
         }
     }
 
+    // Auto-train: evaluar transición de fase antes de construir la próxima generación
+    if (autoTrain.active) {
+        var _finRate = cars.length > 0 ? cars.filter(function (c) { return c.finished; }).length / cars.length : 0;
+        var _hitRate = cars.length > 0 ? cars.filter(function (c) { return c.curriculumGoalHit; }).length / cars.length : 0;
+        autoTrainTick(_finRate, _hitRate);
+    }
+
     gen++;
     top3ids = new Set(selResult.selected.map(function (c) { return c.id; }));
     var eliteNets = selResult.selected.map(function (c) { return c.net; });
@@ -1034,12 +1285,14 @@ function newGen() {
     if (fineTuneActive && fineTuneProfile) {
         var baseSeed = new Net(fineTuneProfile.net);
         if (cmaes.active) {
-            // Si CMA-ES está activo, redirigir la media al nuevo seed en lugar de generar GA
+            // Redirigir CMA-ES al nuevo seed (avance de sector o stage recovery)
+            // En curriculum: sigma 0.2 para que CMA-ES explore el nuevo sector con margen suficiente.
+            // En fase de laps (no curriculum): sigma 0.15 para explotar lo aprendido.
             cmaes.mean = netFlatten(baseSeed.w);
             cmaes.ps = new Array(cmaes.n).fill(0);
             cmaes.pc = new Array(cmaes.n).fill(0);
             cmaes.D = new Array(cmaes.n).fill(1.0);
-            cmaes.sigma = 0.15;
+            cmaes.sigma = curriculumMode ? 0.2 : 0.15;
             newNets = cmaesGenPop();
         } else {
             newNets = [];
@@ -1062,6 +1315,14 @@ function newGen() {
         // Inyectar mejor explorador si aun no hay vueltas
         if (gbl === Infinity && bestDistNet) {
             newNets.push(new Net(JSON.parse(JSON.stringify(bestDistNet))));
+        }
+        // Preservar conocimiento de curriculum aunque no haya vuelta aún
+        if (gbl === Infinity && bestCurriculumNet) {
+            newNets.push(new Net(JSON.parse(JSON.stringify(bestCurriculumNet))));
+        }
+        // Hall of fame: siempre preservar el mejor lap net histórico para prevenir olvido catastrófico
+        if (gbl !== Infinity && bestLapNet) {
+            newNets.push(new Net(JSON.parse(JSON.stringify(bestLapNet))));
         }
 
         // Micro-mutaciones: ajustes mínimos para exprimir décimas de segundo
@@ -1108,8 +1369,33 @@ function newGen() {
                 var ZONES = 24;
                 spawnZoneTarget = Math.floor((i / newNets.length) * ZONES + Math.random() * (ZONES / newNets.length)) % ZONES;
             } else if (curriculumMode && curriculumIsolated) {
-                // Aislado: todos spawnean al inicio del sector actual (zona anterior al goal)
-                spawnZoneTarget = Math.max(0, curriculumSector - 1);
+                // Aislado: usar estado de aproximación REAL si está disponible.
+                // Esto elimina el covariate shift: el auto ve el sector con la velocidad
+                // y ángulo que tendría llegando desde el inicio, no arrancando de cero.
+                // Mapear sector curriculum (puede ser 1..192) a zona interna (0..23) para el approach state
+                var approachCarZone = Math.max(0, Math.min(23, Math.floor((curriculumSector - 1) / CURRICULUM_ZONES * 24)));
+                var savedState = sectorApproachStates[approachCarZone]
+                    || sectorApproachStates[Math.max(0, approachCarZone - 1)]; // zona anterior como fallback
+                if (savedState) {
+                    // Retroceder ~2.5% del track desde el estado guardado para dar un runway corto.
+                    // Spawning exactamente en la frontera de zona = puede ser plena curva a alta velocidad.
+                    // Con runway: el auto sale alineado con el CL y tiene espacio para reaccionar.
+                    var nearIdx = nearCL(savedState.x, savedState.y);
+                    var runupSteps = Math.max(3, Math.floor(CL.length * 0.025));
+                    var backIdx = (nearIdx - runupSteps + CL.length) % CL.length;
+                    var bPt = CL[backIdx];
+                    var bNext = CL[(backIdx + 1) % CL.length];
+                    c.x = bPt[0] + (Math.random() - 0.5) * 2;
+                    c.y = bPt[1] + (Math.random() - 0.5) * 2;
+                    c.ang = Math.atan2(bNext[1] - bPt[1], bNext[0] - bPt[0]) + (Math.random() - 0.5) * 0.06;
+                    c.spd = savedState.spd * (0.6 + Math.random() * 0.25); // algo más lento para mayor margen
+                    c.prevX = c.x; c.prevY = c.y;
+                    c.prevIdx = nearCL(c.x, c.y);
+                    c.spawnZone = approachCarZone;
+                    c.crossCD = 30;
+                } else {
+                    spawnZoneTarget = approachCarZone; // fallback si aún no hay estado guardado
+                }
             }
             if (spawnZoneTarget >= 0) {
                 var ZONES = 24;
