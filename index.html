@@ -153,20 +153,45 @@
                 <!-- Evolution Panel -->
                 <div class="panel" id="panel-train">
 
-                    <div class="tool-group" id="autotrain-group" style="border:2px solid rgba(0,230,118,0.35); background:rgba(0,230,118,0.04); border-radius:6px; padding:10px;">
+                    <div class="tool-group" id="autotrain-group"
+                        style="border:2px solid rgba(0,230,118,0.35); background:rgba(0,230,118,0.04); border-radius:6px; padding:10px;">
                         <h3 style="color:#00e676; margin-bottom:8px;">AUTO TRAIN</h3>
+
+                        <div style="margin-bottom:8px;">
+                            <label style="font-size:10px; color:#888; display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.05em;">Plan de entrenamiento</label>
+                            <select id="autotrain-plan" style="width:100%; background:#1a1a2e; color:#e0e0e0; border:1px solid #333; border-radius:4px; padding:5px 7px; font-size:12px; cursor:pointer;">
+                                <option value="consolidacion">Consolidación (nuevo)</option>
+                                <option value="cobertura">Cobertura (original)</option>
+                                <option value="vueltaforzada">Vuelta Forzada</option>
+                            </select>
+                            <div id="autotrain-plan-desc" style="font-size:10px; color:#555; margin-top:4px; line-height:1.4;">
+                                Exploración → Refinado zona 0 → Vueltas. Estable para pistas nuevas y brains transferidos.
+                            </div>
+                        </div>
+
+                        <div id="vf-gens-row" style="display:none; margin-bottom:8px;">
+                            <label style="font-size:10px; color:#888; display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.05em;">VF — Gens sin mejora para activar spawn</label>
+                            <input type="number" id="vf-gens-input" min="5" max="200" value="20"
+                                style="width:100%; background:#1a1a2e; color:#e0e0e0; border:1px solid #333; border-radius:4px; padding:4px 7px; font-size:12px;">
+                        </div>
+
                         <div class="control-row" style="margin-bottom:6px;">
                             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                                 <input type="checkbox" id="autotrain-toggle"> Entrenamiento Continuo Automático
                             </label>
                         </div>
-                        <div id="autotrain-phase-box" style="display:none; padding:8px; background:rgba(0,0,0,0.3); border-radius:5px; margin-top:6px;">
-                            <div style="font-size:10px; color:#666; margin-bottom:3px; text-transform:uppercase; letter-spacing:0.05em;">Fase activa</div>
-                            <div id="autotrain-phase-name" style="font-size:15px; font-weight:bold; color:#00e676;">EXPLORACIÓN</div>
+                        <div id="autotrain-phase-box"
+                            style="display:none; padding:8px; background:rgba(0,0,0,0.3); border-radius:5px; margin-top:6px;">
+                            <div
+                                style="font-size:10px; color:#666; margin-bottom:3px; text-transform:uppercase; letter-spacing:0.05em;">
+                                Fase activa</div>
+                            <div id="autotrain-phase-name" style="font-size:15px; font-weight:bold; color:#00e676;">
+                                EXPLORACIÓN</div>
                             <div id="autotrain-phase-detail" style="font-size:11px; color:#888; margin-top:2px;"></div>
                         </div>
                         <div style="font-size:10px; color:#555; margin-top:6px; line-height:1.5;">
-                            Gestiona automáticamente: Exploración → Curriculum → Vueltas → CMA-ES. Los controles manuales quedan disponibles para override.
+                            Gestiona automáticamente fases de entrenamiento. Los controles
+                            manuales quedan disponibles para override.
                         </div>
                     </div>
 
@@ -239,7 +264,8 @@
                             </label>
                         </div>
                         <div style="font-size:11px; color:#888; padding:4px 0 4px 4px; line-height:1.5;">
-                            Cada auto arranca en una zona aleatoria del circuito. Cubre todo el mapa desde la gen 1. Incompatible con Curriculum.
+                            Cada auto arranca en una zona aleatoria del circuito. Cubre todo el mapa desde la gen 1.
+                            Incompatible con Curriculum.
                         </div>
                     </div>
 
@@ -256,23 +282,35 @@
                                 <input type="range" id="curr-thresh" min="0.2" max="1" step="0.05" value="0.6">
                             </div>
                             <div class="control-row" style="margin-top:6px;">
-                                <label style="font-size:11px; color:#aaa; margin-bottom:4px; display:block;">Granularidad de sectores</label>
+                                <label
+                                    style="font-size:11px; color:#aaa; margin-bottom:4px; display:block;">Granularidad
+                                    de sectores</label>
                                 <div style="display:flex; gap:4px;">
-                                    <button class="curr-zones-btn pill active" data-zones="24"  style="flex:1; font-size:11px; padding:4px 0;">1× (24)</button>
-                                    <button class="curr-zones-btn pill"        data-zones="48"  style="flex:1; font-size:11px; padding:4px 0;">2× (48)</button>
-                                    <button class="curr-zones-btn pill"        data-zones="96"  style="flex:1; font-size:11px; padding:4px 0;">4× (96)</button>
-                                    <button class="curr-zones-btn pill"        data-zones="192" style="flex:1; font-size:11px; padding:4px 0;">8× (192)</button>
+                                    <button class="curr-zones-btn pill active" data-zones="24"
+                                        style="flex:1; font-size:11px; padding:4px 0;">1× (24)</button>
+                                    <button class="curr-zones-btn pill" data-zones="48"
+                                        style="flex:1; font-size:11px; padding:4px 0;">2× (48)</button>
+                                    <button class="curr-zones-btn pill" data-zones="96"
+                                        style="flex:1; font-size:11px; padding:4px 0;">4× (96)</button>
+                                    <button class="curr-zones-btn pill" data-zones="192"
+                                        style="flex:1; font-size:11px; padding:4px 0;">8× (192)</button>
                                 </div>
-                                <div style="font-size:10px; color:#888; margin-top:3px;" id="curr-zones-desc">Cada sector = 1/24 de pista</div>
+                                <div style="font-size:10px; color:#888; margin-top:3px;" id="curr-zones-desc">Cada
+                                    sector = 1/24 de pista</div>
                             </div>
 
                             <!-- Navegación manual de sectores -->
-                            <div style="margin-top:8px; padding:6px 8px; background:rgba(255,152,0,0.08); border-radius:4px;">
+                            <div
+                                style="margin-top:8px; padding:6px 8px; background:rgba(255,152,0,0.08); border-radius:4px;">
                                 <div style="font-size:11px; color:#aaa; margin-bottom:6px;">Sector objetivo</div>
                                 <div style="display:flex; align-items:center; gap:6px;">
-                                    <button id="curr-sector-prev" style="width:28px; height:28px; font-size:14px; background:rgba(255,152,0,0.2); border:1px solid rgba(255,152,0,0.4); color:#ff9800; border-radius:4px; cursor:pointer;">◀</button>
-                                    <span style="flex:1; text-align:center; font-size:15px; font-weight:bold; color:#ff9800;" id="curr-sector-display">1 / 23</span>
-                                    <button id="curr-sector-next" style="width:28px; height:28px; font-size:14px; background:rgba(255,152,0,0.2); border:1px solid rgba(255,152,0,0.4); color:#ff9800; border-radius:4px; cursor:pointer;">▶</button>
+                                    <button id="curr-sector-prev"
+                                        style="width:28px; height:28px; font-size:14px; background:rgba(255,152,0,0.2); border:1px solid rgba(255,152,0,0.4); color:#ff9800; border-radius:4px; cursor:pointer;">◀</button>
+                                    <span
+                                        style="flex:1; text-align:center; font-size:15px; font-weight:bold; color:#ff9800;"
+                                        id="curr-sector-display">1 / 23</span>
+                                    <button id="curr-sector-next"
+                                        style="width:28px; height:28px; font-size:14px; background:rgba(255,152,0,0.2); border:1px solid rgba(255,152,0,0.4); color:#ff9800; border-radius:4px; cursor:pointer;">▶</button>
                                 </div>
                                 <div style="margin-top:6px; font-size:11px; color:#aaa;">
                                     Alcanzaron meta: <span id="curr-hit-display" style="color:#00e676;">—</span>
@@ -280,28 +318,35 @@
                             </div>
 
                             <!-- Toggle acumulativo / aislado -->
-                            <div style="margin-top:8px; display:flex; gap:0; border-radius:4px; overflow:hidden; border:1px solid rgba(255,152,0,0.3);">
-                                <button id="curr-mode-cumul" style="flex:1; padding:5px; font-size:11px; font-weight:bold; background:rgba(255,152,0,0.4); color:#ff9800; border:none; cursor:pointer;">Acumulativo</button>
-                                <button id="curr-mode-isol" style="flex:1; padding:5px; font-size:11px; font-weight:bold; background:transparent; color:#666; border:none; cursor:pointer;">Aislado</button>
+                            <div
+                                style="margin-top:8px; display:flex; gap:0; border-radius:4px; overflow:hidden; border:1px solid rgba(255,152,0,0.3);">
+                                <button id="curr-mode-cumul"
+                                    style="flex:1; padding:5px; font-size:11px; font-weight:bold; background:rgba(255,152,0,0.4); color:#ff9800; border:none; cursor:pointer;">Acumulativo</button>
+                                <button id="curr-mode-isol"
+                                    style="flex:1; padding:5px; font-size:11px; font-weight:bold; background:transparent; color:#666; border:none; cursor:pointer;">Aislado</button>
                             </div>
-                            <div style="font-size:10px; color:#666; margin-top:4px; line-height:1.4;" id="curr-mode-desc">
+                            <div style="font-size:10px; color:#666; margin-top:4px; line-height:1.4;"
+                                id="curr-mode-desc">
                                 Spawn zona 0 → llegar al sector N
                             </div>
                         </div>
                     </div>
 
-                    <div class="tool-group" style="border:1px solid rgba(206,147,216,0.3); background:rgba(206,147,216,0.04); border-radius:6px; padding:10px;">
+                    <div class="tool-group"
+                        style="border:1px solid rgba(206,147,216,0.3); background:rgba(206,147,216,0.04); border-radius:6px; padding:10px;">
                         <h3 style="color:#ce93d8">CMA-ES — Optimización de Tiempo</h3>
                         <div class="control-row" style="margin-bottom:6px;">
                             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                                 <input type="checkbox" id="cmaes-toggle"> Activar CMA-ES
                             </label>
                         </div>
-                        <div id="cmaes-status" style="font-size:11px; color:#888; padding:4px 0 2px 4px; line-height:1.6;">
+                        <div id="cmaes-status"
+                            style="font-size:11px; color:#888; padding:4px 0 2px 4px; line-height:1.6;">
                             Desactivado — usa GA estándar
                         </div>
                         <div style="font-size:10px; color:#666; padding:2px 4px; line-height:1.4;">
-                            Aprende qué cambios de pesos mejoran el tiempo. Activar después de que la IA ya complete vueltas.
+                            Aprende qué cambios de pesos mejoran el tiempo. Activar después de que la IA ya complete
+                            vueltas.
                         </div>
                     </div>
 
@@ -431,7 +476,8 @@
                 <div class="hud-item" title="Tiempo mínimo teórico según física del auto y trazado geométrico ideal">
                     <div style="display:flex; align-items:center; gap:4px;">
                         <span style="font-size:9px; letter-spacing:0.5px; color:#888;">TEÓRICO</span>
-                        <span style="width:8px; height:8px; border-radius:50%; background:linear-gradient(135deg,#00e5ff,#ff1744); display:inline-block;"></span>
+                        <span
+                            style="width:8px; height:8px; border-radius:50%; background:linear-gradient(135deg,#00e5ff,#ff1744); display:inline-block;"></span>
                     </div>
                     <div style="font-size:17px; font-weight:700; color:#ce93d8;" id="steo">--</div>
                 </div>
@@ -461,6 +507,8 @@
                 <button class="vp-btn" id="btn-zoom-in">+</button>
                 <button class="vp-btn" id="btn-zoom-out">-</button>
                 <button class="vp-btn" id="btn-reset-view">↺</button>
+                <button class="vp-btn" id="btn-toggle-trazado" title="Mostrar/ocultar trazado ideal"
+                    style="font-size:11px; letter-spacing:0.3px;">T</button>
                 <button class="vp-btn" id="btn-fs">⛶</button>
             </div>
         </main>

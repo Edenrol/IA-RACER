@@ -424,6 +424,7 @@ function calcIdealLine() {
     var key = CL.length + ',' + TW.toFixed(1);
     if (key === _idealLineCacheKey && _idealLineCache) return _idealLineCache;
     if (!loaded || CL.length < 10) { _idealLineCache = null; return null; }
+    if (!INN || !OUT || INN.length !== CL.length) { _idealLineCache = null; return null; }
 
     var n = CL.length;
     var pts = [];
@@ -437,24 +438,39 @@ function calcIdealLine() {
         var u1x = v1x / l1, u1y = v1y / l1;
         var u2x = v2x / l2, u2y = v2y / l2;
 
-        // Curvatura con signo: positivo = giro izquierda, negativo = derecha
-        var kSigned = u1x * u2y - u1y * u2x;
-        // Curvatura física en 1/unidades-internas (para cálculo de velocidad máxima)
-        var kPhys = Math.abs(kSigned) / ((l1 + l2) / 2 + 0.01);
+        // kMag = 1-dot: crece monótonamente de 0 (recto) a 2 (horquilla 180°).
+        // sin(angle) daba el mismo valor en 20° y 160°, lo cual era incorrecto.
+        var crossProd = u1x * u2y - u1y * u2x;
+        var dotProd   = u1x * u2x + u1y * u2y;
+        var kMag  = 1 - dotProd; // [0, 2]
+        var kPhys = kMag / ((l1 + l2) / 2 + 0.01);
 
-        // Normal izquierda de la dirección media
+        // Dirección normal media (para saber hacia qué lado apunta la curva)
         var adx = u1x + u2x, ady = u1y + u2y;
-        var al = Math.sqrt(adx * adx + ady * ady) || 1;
-        var lnx = -ady / al, lny = adx / al;
+        var al = Math.sqrt(adx * adx + ady * ady);
+        var lnx, lny;
+        if (al < 0.01) { lnx = -u1y; lny = u1x; }   // fallback horquilla exacta
+        else            { lnx = -ady / al; lny = adx / al; }
 
-        // Desplazar hacia el interior de la curva
-        var maxShift = TW * 0.42;
-        var shift = Math.max(-maxShift, Math.min(maxShift, kSigned * TW * 1.2));
-        pts.push([curr[0] + lnx * shift, curr[1] + lny * shift, kPhys]);
+        // Dirección del desplazamiento según el sentido de giro
+        var kSign = (crossProd >= 0) ? 1 : -1;
+        var sdx = lnx * kSign, sdy = lny * kSign;
+
+        // Elegir la pared real (INN o OUT) que queda en esa dirección.
+        // Interpolamos hacia ella en vez de desplazar desde CL con un offset libre:
+        // así el trazado NUNCA puede salirse del circuito.
+        var toInn = (INN[i][0] - curr[0]) * sdx + (INN[i][1] - curr[1]) * sdy;
+        var wall = (toInn >= 0) ? INN[i] : OUT[i];
+
+        // Fracción de avance hacia la pared interior: 0 en recta, hasta 0.78 en curva cerrada
+        // (cap en 0.78 en vez de 0.82 para dejar margen frente a la compresión en curvas interiores)
+        var frac = Math.min(0.78, kMag * 1.4);
+        pts.push([curr[0] + (wall[0] - curr[0]) * frac,
+                  curr[1] + (wall[1] - curr[1]) * frac, kPhys]);
     }
 
-    // Suavizado (60 pasadas): convierte el desplazamiento brusco en línea de trazado fluida
-    for (var pass = 0; pass < 60; pass++) {
+    // Suavizado 25 pasadas: convierte los saltos punto a punto en línea de trazado fluida
+    for (var pass = 0; pass < 25; pass++) {
         var s = [];
         for (var i = 0; i < n; i++) {
             var p = pts[(i - 1 + n) % n], c = pts[i], nx = pts[(i + 1) % n];
@@ -463,6 +479,34 @@ function calcIdealLine() {
                     c[2]]);
         }
         pts = s;
+    }
+
+    // Clamp post-suavizado: si algún punto quedó fuera de la pista, retroceder hacia CL
+    for (var i = 0; i < n; i++) {
+        if (!isOnTrack(pts[i][0], pts[i][1])) {
+            var cx = CL[i][0], cy = CL[i][1];
+            var px = pts[i][0], py = pts[i][1];
+            var clamped = false;
+            for (var st = 1; st <= 12; st++) {
+                var t = st / 12;
+                var tx = px + (cx - px) * t;
+                var ty = py + (cy - py) * t;
+                if (isOnTrack(tx, ty)) { pts[i][0] = tx; pts[i][1] = ty; clamped = true; break; }
+            }
+            if (!clamped) { pts[i][0] = cx; pts[i][1] = cy; }
+        }
+    }
+
+    // Recalcular curvatura desde la línea suavizada (coloreo preciso)
+    for (var i = 0; i < n; i++) {
+        var p = pts[(i - 1 + n) % n], c = pts[i], nx = pts[(i + 1) % n];
+        var sv1x = c[0]-p[0], sv1y = c[1]-p[1];
+        var sv2x = nx[0]-c[0], sv2y = nx[1]-c[1];
+        var sl1 = Math.sqrt(sv1x*sv1x + sv1y*sv1y) || 1;
+        var sl2 = Math.sqrt(sv2x*sv2x + sv2y*sv2y) || 1;
+        var su1x = sv1x/sl1, su1y = sv1y/sl1;
+        var su2x = sv2x/sl2, su2y = sv2y/sl2;
+        pts[i][2] = Math.abs(su1x*su2y - su1y*su2x) / ((sl1+sl2)/2 + 0.01);
     }
 
     _idealLineCache = pts;
@@ -812,7 +856,7 @@ function drawSim() {
     var bestA = alive.reduce(function (a, b) { return a && a._fitness > b._fitness ? a : b; }, null) || alive[0] || null;
 
     // Trazado ideal geométrico (sobre el asfalto, bajo los autos)
-    drawIdealLine(sctx);
+    if (showIdealLine) drawIdealLine(sctx);
 
     // Draw checkpoint zones
     drawCheckpoints(sctx, 24, bestA);
@@ -1070,6 +1114,32 @@ document.getElementById('autotrain-toggle').addEventListener('change', function 
     updateAutoTrainUI();
 });
 
+var AUTOTRAIN_PLAN_DESCS = {
+    consolidacion: 'Exploración → Refinado zona 0 → Vueltas. Estable para pistas nuevas y brains transferidos.',
+    cobertura: 'Exploración → Spawn distribuido por el track → Vueltas. Original; puede romper brains con física angVel.',
+    vueltaforzada: 'Exploración → CMA-ES zona 0 + cada N gens sin mejora spawna todos desde el mejor explorador (posición y física copiadas).'
+};
+var AUTOTRAIN_PLAN_PHASENAMES = {
+    consolidacion: 'CONSOLIDACIÓN',
+    cobertura: 'COBERTURA',
+    vueltaforzada: 'VF SPAWN'
+};
+
+document.getElementById('autotrain-plan').addEventListener('change', function () {
+    autoTrain.plan = this.value;
+    var descEl = document.getElementById('autotrain-plan-desc');
+    if (descEl) descEl.textContent = AUTOTRAIN_PLAN_DESCS[this.value] || '';
+    autoTrain.phaseNames[1] = AUTOTRAIN_PLAN_PHASENAMES[this.value] || 'CONSOLIDACIÓN';
+    var vfRow = document.getElementById('vf-gens-row');
+    if (vfRow) vfRow.style.display = this.value === 'vueltaforzada' ? 'block' : 'none';
+    if (typeof updateAutoTrainUI === 'function') updateAutoTrainUI();
+});
+
+document.getElementById('vf-gens-input').addEventListener('input', function () {
+    var v = parseInt(this.value);
+    if (!isNaN(v) && v >= 5) vfGensThreshold = v;
+});
+
 document.getElementById('cmaes-toggle').addEventListener('change', function () {
     cmaesToggle();
     var statusEl = document.getElementById('cmaes-status');
@@ -1172,6 +1242,12 @@ document.querySelectorAll('.info-btn').forEach(function (btn) {
 
 // Ranking & Pills
 actF = new Set(['st', 'speed', 'laps', 'bl', 'fit']);
+var showIdealLine = false;
+
+document.getElementById('btn-toggle-trazado').addEventListener('click', function () {
+    showIdealLine = !showIdealLine;
+    this.classList.toggle('active', showIdealLine);
+});
 
 document.querySelectorAll('.ft').forEach(function (el) {
     el.addEventListener('click', function () {
